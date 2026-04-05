@@ -8,24 +8,42 @@ struct MetricCard: View {
     let tint: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label(title, systemImage: icon)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Label {
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                } icon: {
+                    Image(systemName: icon)
+                        .font(.caption)
+                        .foregroundStyle(tint)
+                        .padding(5)
+                        .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
+                .foregroundStyle(.secondary)
                 Spacer()
             }
 
             Text(value)
-                .font(.headline)
+                .font(.system(.title3, design: .rounded).weight(.bold))
                 .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
 
             Text(subtitle)
-                .font(.caption)
+                .font(.caption2)
                 .foregroundStyle(.secondary)
         }
-        .padding(12)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(FinanceTheme.cardFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(FinanceTheme.cardStroke, lineWidth: 1)
+        )
+        .shadow(color: FinanceTheme.cardShadow, radius: 10, y: 5)
     }
 }

@@ -27,6 +27,26 @@ struct TransactionFormView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(transaction == nil ? "New Transaction" : "Update Transaction")
+                                .font(.headline)
+                            Text("Capture each expense and income entry with context.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: type.icon)
+                            .font(.title3)
+                            .foregroundStyle(type.tint)
+                            .padding(10)
+                            .background(type.tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .padding(.vertical, 2)
+                }
+                .listRowBackground(Color.clear)
+
                 Section("Details") {
                     TextField("Amount", text: $amountText)
                         .keyboardType(.decimalPad)
@@ -52,7 +72,10 @@ struct TransactionFormView: View {
                         .lineLimit(2...4)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(FinanceScreenBackground())
             .navigationTitle(transaction == nil ? "Add Transaction" : "Edit Transaction")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") {
@@ -64,6 +87,7 @@ struct TransactionFormView: View {
                     Button("Save") {
                         saveTransaction()
                     }
+                    .fontWeight(.semibold)
                 }
             }
         }

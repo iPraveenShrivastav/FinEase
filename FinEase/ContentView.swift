@@ -32,6 +32,9 @@ struct ContentView: View {
                 Label("Insights", systemImage: "chart.line.uptrend.xyaxis")
             }
         }
+        .tint(FinanceTheme.accent)
+        .toolbarBackground(.visible, for: .tabBar)
+        .toolbarBackground(Color.white.opacity(0.98), for: .tabBar)
     }
 }
 

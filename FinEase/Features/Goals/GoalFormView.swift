@@ -24,6 +24,26 @@ struct GoalFormView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(goal == nil ? "Create Monthly Goal" : "Update Monthly Goal")
+                                .font(.headline)
+                            Text("Set a clear target to keep your spending intentional.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "target")
+                            .font(.title3)
+                            .foregroundStyle(FinanceTheme.accent)
+                            .padding(10)
+                            .background(FinanceTheme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .padding(.vertical, 2)
+                }
+                .listRowBackground(Color.clear)
+
                 Section("Goal Details") {
                     TextField("Title", text: $title)
 
@@ -33,13 +53,17 @@ struct GoalFormView: View {
                     DatePicker("Month", selection: $monthDate, displayedComponents: .date)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(FinanceScreenBackground())
             .navigationTitle(goal == nil ? "Create Goal" : "Edit Goal")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") { saveGoal() }
+                        .fontWeight(.semibold)
                 }
             }
         }

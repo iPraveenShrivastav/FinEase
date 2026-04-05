@@ -6,18 +6,22 @@ struct EmptyStateView: View {
     let symbol: String
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             Image(systemName: symbol)
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(FinanceTheme.accent)
+                .padding(12)
+                .background(FinanceTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(.subheadline.weight(.bold))
+
             Text(message)
                 .font(.caption)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
     }
 }

@@ -6,29 +6,29 @@ struct GoalProgressRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.gray.opacity(0.2), lineWidth: 14)
+                .stroke(FinanceTheme.accent.opacity(0.16), lineWidth: 16)
 
             Circle()
                 .trim(from: 0, to: max(0, min(progress, 1)))
                 .stroke(
                     AngularGradient(
-                        colors: [.mint, .teal, .blue],
+                        colors: [FinanceTheme.income, FinanceTheme.accent, .blue],
                         center: .center
                     ),
-                    style: StrokeStyle(lineWidth: 14, lineCap: .round)
+                    style: StrokeStyle(lineWidth: 16, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
                 .animation(.easeInOut(duration: 0.35), value: progress)
 
             VStack(spacing: 4) {
                 Text(progress.asPercent())
-                    .font(.title3.weight(.bold))
+                    .font(.system(.title3, design: .rounded).weight(.bold))
                 Text("Completed")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(width: 160, height: 160)
+        .frame(width: 170, height: 170)
         .frame(maxWidth: .infinity)
     }
 }

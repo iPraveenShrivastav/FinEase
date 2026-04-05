@@ -88,117 +88,145 @@ struct GoalView: View {
         return streak
     }
 
+    private var daysLeftThisMonth: Int {
+        guard let monthEnd = Calendar.current.date(byAdding: .month, value: 1, to: monthStart) else {
+            return 0
+        }
+        let value = Calendar.current.dateComponents([.day], from: Date().startOfDay, to: monthEnd.startOfDay).day ?? 0
+        return max(0, value)
+    }
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if let currentGoal {
-                    SurfaceCard(title: currentGoal.title, subtitle: currentGoal.monthLabel) {
-                        VStack(spacing: 16) {
-                            GoalProgressRing(progress: progress)
+        ZStack {
+            FinanceScreenBackground()
 
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Target")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    Text(currentGoal.targetAmount.asCurrency())
-                                        .font(.headline)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    SurfaceCard(title: "Monthly Challenge", subtitle: "\(daysLeftThisMonth) days left this month") {
+                        Text("Stay intentional with spending and keep building your savings habit one day at a time.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let currentGoal {
+                        SurfaceCard(title: currentGoal.title, subtitle: currentGoal.monthLabel) {
+                            VStack(spacing: 16) {
+                                GoalProgressRing(progress: progress)
+
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Target")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        Text(currentGoal.targetAmount.asCurrency())
+                                            .font(.headline)
+                                    }
+
+                                    Spacer()
+
+                                    VStack(alignment: .trailing, spacing: 4) {
+                                        Text("Remaining")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        Text(remainingAmount.asCurrency())
+                                            .font(.headline)
+                                    }
                                 }
 
-                                Spacer()
+                                HStack(spacing: 12) {
+                                    MetricCard(
+                                        title: "Saved",
+                                        value: savedAmount.asCurrency(),
+                                        subtitle: "This month",
+                                        icon: "leaf.fill",
+                                        tint: FinanceTheme.income
+                                    )
 
-                                VStack(alignment: .trailing, spacing: 4) {
-                                    Text("Remaining")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    Text(remainingAmount.asCurrency())
-                                        .font(.headline)
+                                    MetricCard(
+                                        title: "Progress",
+                                        value: progress.asPercent(),
+                                        subtitle: "Of target",
+                                        icon: "speedometer",
+                                        tint: FinanceTheme.accent
+                                    )
                                 }
-                            }
 
-                            HStack(spacing: 12) {
-                                MetricCard(
-                                    title: "Saved",
-                                    value: savedAmount.asCurrency(),
-                                    subtitle: "This month",
-                                    icon: "leaf.fill",
-                                    tint: .green
-                                )
-
-                                MetricCard(
-                                    title: "Progress",
-                                    value: progress.asPercent(),
-                                    subtitle: "Of target",
-                                    icon: "speedometer",
-                                    tint: .blue
-                                )
+                                Button("Edit Goal") {
+                                    editingGoal = currentGoal
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(FinanceTheme.accent)
                             }
+                        }
+                    } else {
+                        SurfaceCard(title: "Monthly Savings Challenge") {
+                            EmptyStateView(
+                                title: "No active goal",
+                                message: "Set a target for this month and track your progress automatically.",
+                                symbol: "target"
+                            )
 
-                            Button("Edit Goal") {
-                                editingGoal = currentGoal
+                            Button("Create Goal") {
+                                showingGoalForm = true
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.borderedProminent)
+                            .tint(FinanceTheme.accent)
                         }
                     }
-                } else {
-                    SurfaceCard(title: "Monthly Savings Challenge") {
-                        EmptyStateView(
-                            title: "No active goal",
-                            message: "Set a target for this month and track your progress automatically.",
-                            symbol: "target"
-                        )
 
-                        Button("Create Goal") {
-                            showingGoalForm = true
+                    SurfaceCard(title: "Challenge Snapshot", subtitle: "Current month") {
+                        HStack(spacing: 12) {
+                            MetricCard(
+                                title: "No-Spend Days",
+                                value: "\(noSpendDays)",
+                                subtitle: "Total days",
+                                icon: "calendar.badge.checkmark",
+                                tint: .mint
+                            )
+
+                            MetricCard(
+                                title: "Current Streak",
+                                value: "\(activeNoSpendStreak)",
+                                subtitle: "Days in a row",
+                                icon: "flame.fill",
+                                tint: .orange
+                            )
                         }
-                        .buttonStyle(.borderedProminent)
+                    }
+
+                    SurfaceCard(title: "How This Goal Works") {
+                        Text("Your monthly saved amount is calculated as income minus expenses for the current month. Keep spending lower than income to hit your target faster.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
                 }
-
-                SurfaceCard(title: "Challenge Snapshot", subtitle: "Current month") {
-                    HStack(spacing: 12) {
-                        MetricCard(
-                            title: "No-Spend Days",
-                            value: "\(noSpendDays)",
-                            subtitle: "Total days",
-                            icon: "calendar.badge.checkmark",
-                            tint: .mint
-                        )
-
-                        MetricCard(
-                            title: "Current Streak",
-                            value: "\(activeNoSpendStreak)",
-                            subtitle: "Days in a row",
-                            icon: "flame.fill",
-                            tint: .orange
-                        )
-                    }
-                }
-
-                SurfaceCard(title: "How This Goal Works") {
-                    Text("Your monthly saved amount is calculated as income minus expenses for the current month. Keep spending lower than income to hit your target faster.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                .padding(.horizontal)
+                .padding(.vertical, 12)
             }
-            .padding()
         }
         .navigationTitle("Savings Goal")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showingGoalForm = true
                 } label: {
-                    Image(systemName: "plus.circle.fill")
+                    Image(systemName: "plus")
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(10)
+                        .background(FinanceTheme.accent.gradient, in: Circle())
                 }
                 .accessibilityLabel("Create monthly goal")
             }
         }
         .sheet(isPresented: $showingGoalForm) {
             GoalFormView()
+                .presentationDetents([.medium, .large])
         }
         .sheet(item: $editingGoal) { goal in
             GoalFormView(goal: goal)
+                .presentationDetents([.medium, .large])
         }
     }
 }

@@ -12,10 +12,10 @@ struct SurfaceCard<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.headline)
+                    .font(.system(.headline, design: .rounded).weight(.semibold))
                 if let subtitle {
                     Text(subtitle)
                         .font(.caption)
@@ -25,11 +25,16 @@ struct SurfaceCard<Content: View>: View {
 
             content
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemBackground))
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(FinanceTheme.cardFill)
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(FinanceTheme.cardStroke, lineWidth: 1)
+        )
+        .shadow(color: FinanceTheme.cardShadow, radius: 12, y: 6)
     }
 }

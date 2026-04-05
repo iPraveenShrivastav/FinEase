@@ -5,19 +5,19 @@ struct TransactionRowView: View {
     let showChevron: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             ZStack {
                 Circle()
                     .fill(transaction.category.tint.opacity(0.18))
-                    .frame(width: 34, height: 34)
+                    .frame(width: 38, height: 38)
                 Image(systemName: transaction.category.icon)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(transaction.category.tint)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(transaction.notes.isEmpty ? transaction.category.rawValue : transaction.notes)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline.weight(.bold))
                     .lineLimit(1)
                 Text(transaction.date.formatted(date: .abbreviated, time: .omitted))
                     .font(.caption)
@@ -28,7 +28,8 @@ struct TransactionRowView: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(amountLabel)
-                    .font(.subheadline.weight(.bold))
+                    .font(.subheadline.weight(.heavy))
+                    .monospacedDigit()
                     .foregroundStyle(transaction.type.tint)
                 Text(transaction.type.rawValue)
                     .font(.caption)
@@ -42,7 +43,7 @@ struct TransactionRowView: View {
             }
         }
         .contentShape(Rectangle())
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
     }
 
     private var amountLabel: String {

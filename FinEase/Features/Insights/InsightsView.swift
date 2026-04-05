@@ -78,135 +78,137 @@ struct InsightsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if transactions.isEmpty {
-                    EmptyStateView(
-                        title: "No insight data yet",
-                        message: "Add transactions to unlock spending trends and category insights.",
-                        symbol: "chart.xyaxis.line"
-                    )
-                } else {
-                    SurfaceCard(title: "Top Spending Category", subtitle: "This month") {
-                        if let highestSpendingCategory {
-                            HStack {
-                                Label(highestSpendingCategory.category.rawValue, systemImage: highestSpendingCategory.category.icon)
-                                    .font(.headline)
-                                    .foregroundStyle(highestSpendingCategory.category.tint)
-                                Spacer()
-                                Text(highestSpendingCategory.amount.asCurrency())
-                                    .font(.headline)
-                            }
-                        } else {
-                            EmptyStateView(
-                                title: "No expenses this month",
-                                message: "Log an expense to see category insights.",
-                                symbol: "tray"
-                            )
-                        }
-                    }
+        ZStack {
+            FinanceScreenBackground()
 
-                    SurfaceCard(title: "Week-over-Week", subtitle: "Expense comparison") {
-                        HStack(spacing: 12) {
-                            MetricCard(
-                                title: "This Week",
-                                value: thisWeekExpense.asCurrency(),
-                                subtitle: "Expenses",
-                                icon: "calendar",
-                                tint: .orange
-                            )
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if transactions.isEmpty {
+                        EmptyStateView(
+                            title: "No insight data yet",
+                            message: "Add transactions to unlock spending trends and category insights.",
+                            symbol: "chart.xyaxis.line"
+                        )
+                    } else {
+                        SurfaceCard(title: "Insight Pulse", subtitle: "This month at a glance") {
+                            VStack(spacing: 12) {
+                                if let highestSpendingCategory {
+                                    HStack {
+                                        Label(highestSpendingCategory.category.rawValue, systemImage: highestSpendingCategory.category.icon)
+                                            .font(.headline)
+                                            .foregroundStyle(highestSpendingCategory.category.tint)
+                                        Spacer()
+                                        Text(highestSpendingCategory.amount.asCurrency())
+                                            .font(.headline)
+                                    }
+                                }
 
-                            MetricCard(
-                                title: "Last Week",
-                                value: lastWeekExpense.asCurrency(),
-                                subtitle: "Expenses",
-                                icon: "calendar.badge.minus",
-                                tint: .blue
-                            )
-                        }
-
-                        HStack {
-                            Label(
-                                weekOverWeekChange >= 0 ? "Up by \(abs(weekOverWeekChange).asPercentValue())" : "Down by \(abs(weekOverWeekChange).asPercentValue())",
-                                systemImage: weekOverWeekChange >= 0 ? "arrow.up.right" : "arrow.down.right"
-                            )
-                            .foregroundStyle(weekOverWeekChange >= 0 ? .red : .green)
-                            .font(.subheadline.weight(.semibold))
-                            Spacer()
-                        }
-                    }
-
-                    SurfaceCard(title: "Monthly Expense Trend", subtitle: "Last 6 months") {
-                        Chart(monthlyExpenseTrend) { point in
-                            AreaMark(
-                                x: .value("Month", point.month, unit: .month),
-                                y: .value("Expense", point.expense)
-                            )
-                            .foregroundStyle(.blue.opacity(0.15))
-
-                            LineMark(
-                                x: .value("Month", point.month, unit: .month),
-                                y: .value("Expense", point.expense)
-                            )
-                            .foregroundStyle(.blue)
-                            .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-
-                            PointMark(
-                                x: .value("Month", point.month, unit: .month),
-                                y: .value("Expense", point.expense)
-                            )
-                            .foregroundStyle(.blue)
-                        }
-                        .chartXAxis {
-                            AxisMarks(values: .stride(by: .month)) { _ in
-                                AxisGridLine()
-                                AxisValueLabel(format: .dateTime.month(.abbreviated))
+                                if let frequentTransactionType {
+                                    HStack {
+                                        Label("Frequent Type", systemImage: frequentTransactionType.icon)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        Spacer()
+                                        Text(frequentTransactionType.rawValue)
+                                            .font(.caption.weight(.bold))
+                                            .padding(.vertical, 4)
+                                            .padding(.horizontal, 8)
+                                            .background(frequentTransactionType.tint.opacity(0.15), in: Capsule())
+                                    }
+                                }
                             }
                         }
-                        .frame(height: 220)
-                    }
 
-                    SurfaceCard(title: "Category Breakdown", subtitle: "This month") {
-                        if currentMonthExpenseByCategory.isEmpty {
-                            EmptyStateView(
-                                title: "No expense categories yet",
-                                message: "Record an expense to view your category distribution.",
-                                symbol: "chart.bar.xaxis"
-                            )
-                        } else {
-                            Chart(currentMonthExpenseByCategory) { point in
-                                BarMark(
-                                    x: .value("Category", point.category.rawValue),
-                                    y: .value("Amount", point.amount)
+                        SurfaceCard(title: "Week-over-Week", subtitle: "Expense comparison") {
+                            HStack(spacing: 12) {
+                                MetricCard(
+                                    title: "This Week",
+                                    value: thisWeekExpense.asCurrency(),
+                                    subtitle: "Expenses",
+                                    icon: "calendar",
+                                    tint: FinanceTheme.expense
                                 )
-                                .foregroundStyle(point.category.tint.gradient)
+
+                                MetricCard(
+                                    title: "Last Week",
+                                    value: lastWeekExpense.asCurrency(),
+                                    subtitle: "Expenses",
+                                    icon: "calendar.badge.minus",
+                                    tint: .blue
+                                )
+                            }
+
+                            HStack {
+                                Label(
+                                    weekOverWeekChange >= 0 ? "Up by \(abs(weekOverWeekChange).asPercentValue())" : "Down by \(abs(weekOverWeekChange).asPercentValue())",
+                                    systemImage: weekOverWeekChange >= 0 ? "arrow.up.right" : "arrow.down.right"
+                                )
+                                .foregroundStyle(weekOverWeekChange >= 0 ? FinanceTheme.expense : FinanceTheme.income)
+                                .font(.subheadline.weight(.semibold))
+                                Spacer()
+                            }
+                        }
+
+                        SurfaceCard(title: "Monthly Expense Trend", subtitle: "Last 6 months") {
+                            Chart(monthlyExpenseTrend) { point in
+                                AreaMark(
+                                    x: .value("Month", point.month, unit: .month),
+                                    y: .value("Expense", point.expense)
+                                )
+                                .foregroundStyle(FinanceTheme.accent.opacity(0.18))
+
+                                LineMark(
+                                    x: .value("Month", point.month, unit: .month),
+                                    y: .value("Expense", point.expense)
+                                )
+                                .foregroundStyle(FinanceTheme.accent)
+                                .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+
+                                PointMark(
+                                    x: .value("Month", point.month, unit: .month),
+                                    y: .value("Expense", point.expense)
+                                )
+                                .foregroundStyle(FinanceTheme.accent)
                             }
                             .chartXAxis {
-                                AxisMarks { _ in
-                                    AxisValueLabel()
+                                AxisMarks(values: .stride(by: .month)) { _ in
+                                    AxisGridLine()
+                                    AxisValueLabel(format: .dateTime.month(.abbreviated))
                                 }
                             }
                             .frame(height: 220)
                         }
-                    }
 
-                    SurfaceCard(title: "Frequent Transaction Type") {
-                        if let frequentTransactionType {
-                            HStack {
-                                Label(frequentTransactionType.rawValue, systemImage: frequentTransactionType.icon)
-                                    .font(.headline)
-                                    .foregroundStyle(frequentTransactionType.tint)
-                                Spacer()
-                                Text("Based on count")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                        SurfaceCard(title: "Category Breakdown", subtitle: "This month") {
+                            if currentMonthExpenseByCategory.isEmpty {
+                                EmptyStateView(
+                                    title: "No expense categories yet",
+                                    message: "Record an expense to view your category distribution.",
+                                    symbol: "chart.bar.xaxis"
+                                )
+                            } else {
+                                Chart(currentMonthExpenseByCategory) { point in
+                                    BarMark(
+                                        x: .value("Category", point.category.rawValue),
+                                        y: .value("Amount", point.amount)
+                                    )
+                                    .foregroundStyle(point.category.tint.gradient)
+                                }
+                                .chartXAxis {
+                                    AxisMarks { _ in
+                                        AxisValueLabel()
+                                    }
+                                }
+                                .frame(height: 220)
                             }
                         }
                     }
                 }
+                .padding(.horizontal)
+                .padding(.vertical, 12)
             }
-            .padding()
         }
         .navigationTitle("Insights")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

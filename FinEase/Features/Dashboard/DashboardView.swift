@@ -65,90 +65,117 @@ struct DashboardView: View {
         Array(transactions.prefix(5))
     }
 
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        switch hour {
+        case 0..<12:
+            return "Good morning"
+        case 12..<18:
+            return "Good afternoon"
+        default:
+            return "Good evening"
+        }
+    }
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                LazyVGrid(columns: gridColumns, spacing: 12) {
-                    MetricCard(
-                        title: "Current Balance",
-                        value: balance.asCurrency(),
-                        subtitle: "Income - Expenses",
-                        icon: "wallet.bifold.fill",
-                        tint: balance >= 0 ? .teal : .orange
+        ZStack {
+            FinanceScreenBackground()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(greeting)
+                            .font(.system(.title3, design: .rounded).weight(.bold))
+                        Text(Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    BalanceHeroCard(
+                        balance: balance,
+                        income: totalIncome,
+                        expense: totalExpense,
+                        monthlySaved: monthlySaved,
+                        savingsProgress: savingsProgress,
+                        hasGoal: activeGoal != nil
                     )
 
-                    MetricCard(
-                        title: "Total Income",
-                        value: totalIncome.asCurrency(),
-                        subtitle: "All time",
-                        icon: "arrow.down.circle.fill",
-                        tint: .green
-                    )
-
-                    MetricCard(
-                        title: "Total Expenses",
-                        value: totalExpense.asCurrency(),
-                        subtitle: "All time",
-                        icon: "arrow.up.circle.fill",
-                        tint: .red
-                    )
-
-                    MetricCard(
-                        title: "Savings Progress",
-                        value: activeGoal == nil ? "No Goal" : savingsProgress.asPercent(),
-                        subtitle: activeGoal == nil ? "Set a monthly target" : "\(monthlySaved.asCurrency()) saved",
-                        icon: "target",
-                        tint: .blue
-                    )
-                }
-
-                SurfaceCard(title: "Weekly Expense Trend", subtitle: "Last 7 days") {
-                    if weeklyExpensePoints.allSatisfy({ $0.amount == 0 }) {
-                        EmptyStateView(
-                            title: "No expenses this week",
-                            message: "Add an expense transaction to see your weekly trend.",
-                            symbol: "chart.bar"
+                    LazyVGrid(columns: gridColumns, spacing: 12) {
+                        MetricCard(
+                            title: "Total Income",
+                            value: totalIncome.asCurrency(),
+                            subtitle: "All transactions",
+                            icon: "arrow.down.circle.fill",
+                            tint: FinanceTheme.income
                         )
-                    } else {
-                        Chart(weeklyExpensePoints) { point in
-                            BarMark(
-                                x: .value("Day", point.date, unit: .day),
-                                y: .value("Expense", point.amount)
+
+                        MetricCard(
+                            title: "Total Expenses",
+                            value: totalExpense.asCurrency(),
+                            subtitle: "All transactions",
+                            icon: "arrow.up.circle.fill",
+                            tint: FinanceTheme.expense
+                        )
+
+                        MetricCard(
+                            title: "Savings Progress",
+                            value: activeGoal == nil ? "No Goal" : savingsProgress.asPercent(),
+                            subtitle: activeGoal == nil ? "Set monthly target" : "\(monthlySaved.asCurrency()) this month",
+                            icon: "target",
+                            tint: FinanceTheme.accent
+                        )
+                    }
+
+                    SurfaceCard(title: "Weekly Expense Trend", subtitle: "Last 7 days") {
+                        if weeklyExpensePoints.allSatisfy({ $0.amount == 0 }) {
+                            EmptyStateView(
+                                title: "No expenses this week",
+                                message: "Add an expense transaction to reveal your daily spend trend.",
+                                symbol: "chart.bar"
                             )
-                            .foregroundStyle(.orange.gradient)
-                            .cornerRadius(6)
-                        }
-                        .chartYAxis {
-                            AxisMarks(position: .leading)
-                        }
-                        .chartXAxis {
-                            AxisMarks(values: .stride(by: .day)) { _ in
-                                AxisGridLine()
-                                AxisValueLabel(format: .dateTime.weekday(.narrow))
+                        } else {
+                            Chart(weeklyExpensePoints) { point in
+                                BarMark(
+                                    x: .value("Day", point.date, unit: .day),
+                                    y: .value("Expense", point.amount)
+                                )
+                                .foregroundStyle(FinanceTheme.expense.gradient)
+                                .cornerRadius(7)
                             }
+                            .chartYAxis {
+                                AxisMarks(position: .leading)
+                            }
+                            .chartXAxis {
+                                AxisMarks(values: .stride(by: .day)) { _ in
+                                    AxisGridLine()
+                                    AxisValueLabel(format: .dateTime.weekday(.narrow))
+                                }
+                            }
+                            .frame(height: 190)
                         }
-                        .frame(height: 180)
                     }
-                }
 
-                SurfaceCard(title: "Recent Transactions", subtitle: "Latest activity") {
-                    if recentTransactions.isEmpty {
-                        EmptyStateView(
-                            title: "No transactions yet",
-                            message: "Start by adding your first income or expense.",
-                            symbol: "list.bullet.rectangle"
-                        )
-                    } else {
-                        VStack(spacing: 8) {
-                            ForEach(recentTransactions) { transaction in
-                                TransactionRowView(transaction: transaction, showChevron: false)
+                    SurfaceCard(title: "Recent Transactions", subtitle: "Latest activity") {
+                        if recentTransactions.isEmpty {
+                            EmptyStateView(
+                                title: "No transactions yet",
+                                message: "Start by adding your first income or expense.",
+                                symbol: "list.bullet.rectangle"
+                            )
+                        } else {
+                            VStack(spacing: 4) {
+                                ForEach(recentTransactions) { transaction in
+                                    TransactionRowView(transaction: transaction, showChevron: false)
+                                }
                             }
                         }
                     }
                 }
+                .padding(.horizontal)
+                .padding(.vertical, 12)
             }
-            .padding()
         }
         .navigationTitle("Dashboard")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
