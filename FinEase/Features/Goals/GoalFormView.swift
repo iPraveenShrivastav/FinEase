@@ -11,6 +11,7 @@ struct GoalFormView: View {
     @State private var title: String
     @State private var targetAmountText: String
     @State private var monthDate: Date
+    @State private var isSaving = false
     @State private var showingError = false
     @State private var errorMessage = ""
 
@@ -46,24 +47,44 @@ struct GoalFormView: View {
 
                 Section("Goal Details") {
                     TextField("Title", text: $title)
+                        .accessibilityHint("Name of your monthly savings goal")
 
                     TextField("Target amount", text: $targetAmountText)
                         .keyboardType(.decimalPad)
+                        .accessibilityLabel("Target amount")
+                        .accessibilityHint("Enter the amount you want to save")
 
                     DatePicker("Month", selection: $monthDate, displayedComponents: .date)
+                        .accessibilityHint("Choose the month for this goal")
                 }
             }
             .scrollContentBackground(.hidden)
             .background(FinanceScreenBackground())
             .navigationTitle(goal == nil ? "Create Goal" : "Edit Goal")
             .navigationBarTitleDisplayMode(.inline)
+            .disabled(isSaving)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
+                        .accessibilityHint("Discard changes and close the form")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") { saveGoal() }
-                        .fontWeight(.semibold)
+                    if isSaving {
+                        ProgressView()
+                            .accessibilityLabel("Saving goal")
+                    } else {
+                        Button("Save") { saveGoal() }
+                            .fontWeight(.semibold)
+                            .accessibilityHint("Saves this monthly goal")
+                    }
+                }
+            }
+            .overlay {
+                if isSaving {
+                    Color.black.opacity(0.08)
+                        .ignoresSafeArea()
+
+                    LoadingStateView(message: "Saving goal...")
                 }
             }
         }
@@ -81,6 +102,9 @@ struct GoalFormView: View {
             showingError = true
             return
         }
+
+        isSaving = true
+        defer { isSaving = false }
 
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedTitle = trimmedTitle.isEmpty ? "Monthly Savings Challenge" : trimmedTitle

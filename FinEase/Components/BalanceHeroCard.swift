@@ -7,9 +7,11 @@ struct BalanceHeroCard: View {
     let monthlySaved: Double
     let savingsProgress: Double
     let hasGoal: Bool
+    
+    @State private var appear = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Available Balance")
@@ -25,8 +27,8 @@ struct BalanceHeroCard: View {
                 Image(systemName: "creditcard.and.123")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.9))
-                    .padding(10)
-                    .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .padding(12)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
 
             HStack(spacing: 14) {
@@ -46,7 +48,7 @@ struct BalanceHeroCard: View {
             }
 
             if hasGoal {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text("Monthly Savings Goal")
                             .font(.caption.weight(.semibold))
@@ -57,9 +59,18 @@ struct BalanceHeroCard: View {
                             .foregroundStyle(.white)
                     }
 
-                    ProgressView(value: savingsProgress)
-                        .tint(.white)
-                        .scaleEffect(x: 1, y: 1.5, anchor: .center)
+                    GeometryReader { proxy in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(.white.opacity(0.2))
+                                .frame(height: 8)
+                            
+                            Capsule()
+                                .fill(LinearGradient(colors: [.white.opacity(0.8), .white], startPoint: .leading, endPoint: .trailing))
+                                .frame(width: appear ? proxy.size.width * CGFloat(savingsProgress) : 0, height: 8)
+                        }
+                    }
+                    .frame(height: 8)
 
                     Text(savingsProgress.asPercent())
                         .font(.caption.weight(.bold))
@@ -67,16 +78,28 @@ struct BalanceHeroCard: View {
                 }
             }
         }
-        .padding(18)
+        .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(FinanceTheme.heroGradient)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .stroke(.white.opacity(0.2), lineWidth: 1)
+                .blendMode(.overlay)
         )
-        .shadow(color: Color.black.opacity(0.16), radius: 16, y: 10)
+        .shadow(color: FinanceTheme.heroBottom.opacity(0.3), radius: 20, y: 12)
+        .opacity(appear ? 1 : 0.8)
+        .scaleEffect(appear ? 1 : 0.96)
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                appear = true
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Balance summary")
+        .accessibilityValue("Available balance \(balance.asCurrency()), income \(income.asCurrency()), expense \(expense.asCurrency())")
+        .accessibilityHint(hasGoal ? "Includes monthly savings progress" : "Set a goal to track monthly savings")
     }
 }
 
@@ -87,23 +110,25 @@ private struct HeroValuePill: View {
     let tint: Color
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(systemName: icon)
+                .font(.title3)
                 .foregroundStyle(tint)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.8))
                 Text(value)
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(.white)
                     .lineLimit(1)
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white.opacity(0.95), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .environment(\.colorScheme, .dark)
     }
 }

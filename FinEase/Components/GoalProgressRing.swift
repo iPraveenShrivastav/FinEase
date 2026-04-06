@@ -30,5 +30,9 @@ struct GoalProgressRing: View {
         }
         .frame(width: 170, height: 170)
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Savings goal progress")
+        .accessibilityValue("\(progress.asPercent()) complete")
+        .accessibilityHint("Tracks your monthly progress toward the goal")
     }
 }

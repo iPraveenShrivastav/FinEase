@@ -5,9 +5,9 @@ import Charts
 struct DashboardView: View {
     @Query(sort: \TransactionRecord.date, order: .reverse) private var transactions: [TransactionRecord]
     @Query(sort: \SavingsGoalRecord.createdAt, order: .reverse) private var goals: [SavingsGoalRecord]
-
-    private let gridColumns = [GridItem(.flexible()), GridItem(.flexible())]
-
+    @State private var isLoading = true
+    @State private var showItems = [false, false, false, false]
+    
     private var totalIncome: Double {
         transactions
             .filter { $0.type == .income }
@@ -49,20 +49,30 @@ struct DashboardView: View {
         return min(monthlySaved / activeGoal.targetAmount, 1)
     }
 
-    private var weeklyExpensePoints: [DailyExpensePoint] {
-        let calendar = Calendar.current
-        let today = Date().startOfDay
-        return (0..<7).reversed().compactMap { offset in
-            guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
-            let dailyTotal = transactions
-                .filter { $0.type == .expense && calendar.isDate($0.date, inSameDayAs: day) }
-                .reduce(0) { $0 + $1.amount }
-            return DailyExpensePoint(date: day, amount: dailyTotal)
+    // Top categories for the month
+    private struct CategorySpending: Identifiable {
+        let name: String
+        let displayTint: Color
+        let amount: Double
+        var id: String { name }
+    }
+    
+    private var topCategories: [CategorySpending] {
+        let monthStart = Date().startOfMonth
+        let expensesThisMonth = transactions.filter { $0.type == .expense && $0.date >= monthStart }
+        let grouped = Dictionary(grouping: expensesThisMonth, by: { $0.displayCategoryName })
+        let sums = grouped.map { (key, transactions) in
+            CategorySpending(
+                name: key,
+                displayTint: transactions.first?.displayTint ?? .gray,
+                amount: transactions.reduce(0) { $0 + $1.amount }
+            )
         }
+        return Array(sums.sorted(by: { $0.amount > $1.amount }).prefix(4))
     }
 
     private var recentTransactions: [TransactionRecord] {
-        Array(transactions.prefix(5))
+        Array(transactions.prefix(4))
     }
 
     private var greeting: String {
@@ -78,19 +88,26 @@ struct DashboardView: View {
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             FinanceScreenBackground()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 28) {
+                    // Header
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(greeting)
-                            .font(.system(.title3, design: .rounded).weight(.bold))
+                            .font(.system(.title, design: .rounded).weight(.bold))
                         Text(Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                            .font(.subheadline)
+                            .font(.headline)
                             .foregroundStyle(.secondary)
                     }
-
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(greeting). \(Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))")
+                    .opacity(showItems[0] ? 1 : 0)
+                    .offset(y: showItems[0] ? 0 : 20)
+                    .padding(.horizontal, 24)
+                    
+                    // Hero Card
                     BalanceHeroCard(
                         balance: balance,
                         income: totalIncome,
@@ -99,83 +116,135 @@ struct DashboardView: View {
                         savingsProgress: savingsProgress,
                         hasGoal: activeGoal != nil
                     )
+                    .padding(.horizontal, 20)
+                    .opacity(showItems[1] ? 1 : 0)
+                    .offset(y: showItems[1] ? 0 : 20)
 
-                    LazyVGrid(columns: gridColumns, spacing: 12) {
-                        MetricCard(
-                            title: "Total Income",
-                            value: totalIncome.asCurrency(),
-                            subtitle: "All transactions",
-                            icon: "arrow.down.circle.fill",
-                            tint: FinanceTheme.income
-                        )
-
-                        MetricCard(
-                            title: "Total Expenses",
-                            value: totalExpense.asCurrency(),
-                            subtitle: "All transactions",
-                            icon: "arrow.up.circle.fill",
-                            tint: FinanceTheme.expense
-                        )
-
-                        MetricCard(
-                            title: "Savings Progress",
-                            value: activeGoal == nil ? "No Goal" : savingsProgress.asPercent(),
-                            subtitle: activeGoal == nil ? "Set monthly target" : "\(monthlySaved.asCurrency()) this month",
-                            icon: "target",
-                            tint: FinanceTheme.accent
-                        )
-                    }
-
-                    SurfaceCard(title: "Weekly Expense Trend", subtitle: "Last 7 days") {
-                        if weeklyExpensePoints.allSatisfy({ $0.amount == 0 }) {
-                            EmptyStateView(
-                                title: "No expenses this week",
-                                message: "Add an expense transaction to reveal your daily spend trend.",
-                                symbol: "chart.bar"
-                            )
-                        } else {
-                            Chart(weeklyExpensePoints) { point in
-                                BarMark(
-                                    x: .value("Day", point.date, unit: .day),
-                                    y: .value("Expense", point.amount)
+                    // Top Categories Insights
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Text("Analytics")
+                                .font(.title3.weight(.bold))
+                            Spacer()
+                            Text("This Month")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(FinanceTheme.accent)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(FinanceTheme.accent.opacity(0.15), in: Capsule())
+                        }
+                        .padding(.horizontal, 24)
+                        
+                        SurfaceCard(title: "Top Spending", subtitle: "Where your money went") {
+                            if topCategories.isEmpty {
+                                EmptyStateView(
+                                    title: "No expense data",
+                                    message: "Spend a little and see the charts come alive.",
+                                    symbol: "chart.pie.fill"
                                 )
-                                .foregroundStyle(FinanceTheme.expense.gradient)
-                                .cornerRadius(7)
-                            }
-                            .chartYAxis {
-                                AxisMarks(position: .leading)
-                            }
-                            .chartXAxis {
-                                AxisMarks(values: .stride(by: .day)) { _ in
-                                    AxisGridLine()
-                                    AxisValueLabel(format: .dateTime.weekday(.narrow))
+                            } else {
+                                VStack(spacing: 20) {
+                                    Chart(topCategories) { category in
+                                        SectorMark(
+                                            angle: .value("Amount", category.amount),
+                                            innerRadius: .ratio(0.65),
+                                            angularInset: 2.0
+                                        )
+                                        .cornerRadius(6)
+                                        .foregroundStyle(category.displayTint.gradient)
+                                    }
+                                    .frame(height: 160)
+                                    
+                                    // Legend
+                                    HStack(spacing: 16) {
+                                        ForEach(topCategories) { category in
+                                            VStack(spacing: 4) {
+                                                Circle()
+                                                    .fill(category.displayTint)
+                                                    .frame(width: 8, height: 8)
+                                                Text(category.name)
+                                                    .font(.caption2.weight(.medium))
+                                                    .lineLimit(1)
+                                            }
+                                        }
+                                    }
                                 }
+                                .padding(.vertical, 8)
                             }
-                            .frame(height: 190)
                         }
+                        .padding(.horizontal, 20)
                     }
+                    .opacity(showItems[2] ? 1 : 0)
+                    .offset(y: showItems[2] ? 0 : 20)
 
-                    SurfaceCard(title: "Recent Transactions", subtitle: "Latest activity") {
-                        if recentTransactions.isEmpty {
-                            EmptyStateView(
-                                title: "No transactions yet",
-                                message: "Start by adding your first income or expense.",
-                                symbol: "list.bullet.rectangle"
-                            )
-                        } else {
-                            VStack(spacing: 4) {
-                                ForEach(recentTransactions) { transaction in
-                                    TransactionRowView(transaction: transaction, showChevron: false)
+                    // Recent Activity
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Text("Recent Transactions")
+                                .font(.title3.weight(.bold))
+                            Spacer()
+                        }
+                        .padding(.horizontal, 24)
+                        
+                        VStack(spacing: 0) {
+                            if recentTransactions.isEmpty {
+                                EmptyStateView(
+                                    title: "No transactions",
+                                    message: "Start by logging an entry.",
+                                    symbol: "list.bullet.rectangle"
+                                )
+                                .padding(.vertical, 32)
+                            } else {
+                                VStack(spacing: 0) {
+                                    ForEach(Array(recentTransactions.enumerated()), id: \.element.id) { index, transaction in
+                                        TransactionRowView(transaction: transaction, showChevron: true)
+                                            .padding(.vertical, 4)
+                                            .padding(.horizontal, 4)
+                                        
+                                        if index < recentTransactions.count - 1 {
+                                            Divider()
+                                                .padding(.leading, 56)
+                                                .padding(.vertical, 4)
+                                        }
+                                    }
                                 }
                             }
                         }
+                        .padding()
+                        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        .shadow(color: .black.opacity(0.04), radius: 8, y: 4)
+                        .padding(.horizontal, 20)
                     }
+                    .opacity(showItems[3] ? 1 : 0)
+                    .offset(y: showItems[3] ? 0 : 20)
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 12)
+                .padding(.top, 16)
+                .padding(.bottom, 40)
+            }
+            .scrollIndicators(.hidden)
+            .disabled(isLoading)
+
+            if isLoading {
+                Color.black.opacity(0.12)
+                    .ignoresSafeArea()
+                    .backdropFilter(blur: 4)
+
+                LoadingStateView(message: "Loading dashboard...")
             }
         }
-        .navigationTitle("Dashboard")
+        .navigationTitle("Overview")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            for i in 0..<showItems.count {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.75).delay(Double(i) * 0.1)) {
+                    showItems[i] = true
+                }
+            }
+        }
+        .task {
+            guard isLoading else { return }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            isLoading = false
+        }
     }
 }

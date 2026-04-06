@@ -9,21 +9,35 @@ struct CashFlowSummaryCard: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
-            CashFlowMetric(title: "Income", value: income.asCurrency(), icon: "arrow.down.circle.fill", tint: FinanceTheme.income)
-            CashFlowMetric(title: "Expense", value: expense.asCurrency(), icon: "arrow.up.circle.fill", tint: FinanceTheme.expense)
-            CashFlowMetric(title: "Net", value: net.asCurrency(), icon: "equal.circle.fill", tint: net >= 0 ? FinanceTheme.accent : FinanceTheme.expense)
+        VStack(spacing: 12) {
+            VStack(spacing: 2) {
+                Text("Net Flow")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                
+                Text(net.asCurrency())
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(net >= 0 ? FinanceTheme.income : FinanceTheme.expense)
+            }
+            
+            HStack(spacing: 24) {
+                CashFlowMetric(title: "Income", value: income.asCurrency(), icon: "arrow.down", tint: FinanceTheme.income)
+                
+                Divider()
+                    .frame(height: 24)
+                
+                CashFlowMetric(title: "Expense", value: expense.asCurrency(), icon: "arrow.up", tint: FinanceTheme.expense)
+            }
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(FinanceTheme.cardFill)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(FinanceTheme.cardStroke, lineWidth: 1)
-        )
-        .shadow(color: FinanceTheme.cardShadow, radius: 10, y: 6)
+        .padding(.vertical, 16)
+        .padding(.horizontal, 24)
+        .frame(maxWidth: .infinity)
+        .glassCard(cornerRadius: 24)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Monthly cash flow")
+        .accessibilityValue("Income \(income.asCurrency()), Expense \(expense.asCurrency()), Net \(net.asCurrency())")
+        .accessibilityHint("Summary for current month")
     }
 }
 
@@ -34,18 +48,23 @@ private struct CashFlowMetric: View {
     let tint: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label(title, systemImage: icon)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption2.weight(.black))
+                .foregroundStyle(.white)
+                .padding(4)
+                .background(tint.gradient, in: Circle())
 
-            Text(value)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+
+                Text(value)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .monospacedDigit()
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

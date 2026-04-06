@@ -5,6 +5,7 @@ struct GoalView: View {
     @Query(sort: \SavingsGoalRecord.createdAt, order: .reverse) private var goals: [SavingsGoalRecord]
     @Query(sort: \TransactionRecord.date, order: .reverse) private var transactions: [TransactionRecord]
 
+    @State private var isLoading = true
     @State private var showingGoalForm = false
     @State private var editingGoal: SavingsGoalRecord?
 
@@ -12,8 +13,8 @@ struct GoalView: View {
         Date().startOfMonth
     }
 
-    private var currentGoal: SavingsGoalRecord? {
-        goals.first {
+    private var activeGoals: [SavingsGoalRecord] {
+        goals.filter {
             Calendar.current.isDate($0.monthAnchor, equalTo: monthStart, toGranularity: .month) &&
             Calendar.current.isDate($0.monthAnchor, equalTo: monthStart, toGranularity: .year)
         }
@@ -40,14 +41,13 @@ struct GoalView: View {
         max(0, monthIncome - monthExpense)
     }
 
-    private var progress: Double {
-        guard let currentGoal, currentGoal.targetAmount > 0 else { return 0 }
-        return min(savedAmount / currentGoal.targetAmount, 1)
+    private func progress(for goal: SavingsGoalRecord) -> Double {
+        guard goal.targetAmount > 0 else { return 0 }
+        return min(savedAmount / goal.targetAmount, 1)
     }
 
-    private var remainingAmount: Double {
-        guard let currentGoal else { return 0 }
-        return max(currentGoal.targetAmount - savedAmount, 0)
+    private func remainingAmount(for goal: SavingsGoalRecord) -> Double {
+        return max(goal.targetAmount - savedAmount, 0)
     }
 
     private var expenseDays: Set<Date> {
@@ -108,61 +108,11 @@ struct GoalView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    if let currentGoal {
-                        SurfaceCard(title: currentGoal.title, subtitle: currentGoal.monthLabel) {
-                            VStack(spacing: 16) {
-                                GoalProgressRing(progress: progress)
-
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("Target")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                        Text(currentGoal.targetAmount.asCurrency())
-                                            .font(.headline)
-                                    }
-
-                                    Spacer()
-
-                                    VStack(alignment: .trailing, spacing: 4) {
-                                        Text("Remaining")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                        Text(remainingAmount.asCurrency())
-                                            .font(.headline)
-                                    }
-                                }
-
-                                HStack(spacing: 12) {
-                                    MetricCard(
-                                        title: "Saved",
-                                        value: savedAmount.asCurrency(),
-                                        subtitle: "This month",
-                                        icon: "leaf.fill",
-                                        tint: FinanceTheme.income
-                                    )
-
-                                    MetricCard(
-                                        title: "Progress",
-                                        value: progress.asPercent(),
-                                        subtitle: "Of target",
-                                        icon: "speedometer",
-                                        tint: FinanceTheme.accent
-                                    )
-                                }
-
-                                Button("Edit Goal") {
-                                    editingGoal = currentGoal
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(FinanceTheme.accent)
-                            }
-                        }
-                    } else {
+                    if activeGoals.isEmpty {
                         SurfaceCard(title: "Monthly Savings Challenge") {
                             EmptyStateView(
                                 title: "No active goal",
-                                message: "Set a target for this month and track your progress automatically.",
+                                message: "Set targets like 'Emergency Fund' or 'Laptop' for this month.",
                                 symbol: "target"
                             )
 
@@ -171,6 +121,60 @@ struct GoalView: View {
                             }
                             .buttonStyle(.borderedProminent)
                             .tint(FinanceTheme.accent)
+                            .accessibilityHint("Creates a new monthly savings goal")
+                        }
+                    } else {
+                        ForEach(activeGoals) { goal in
+                            SurfaceCard(title: goal.title, subtitle: goal.monthLabel) {
+                                VStack(spacing: 16) {
+                                    GoalProgressRing(progress: progress(for: goal))
+
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Target")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                            Text(goal.targetAmount.asCurrency())
+                                                .font(.headline)
+                                        }
+
+                                        Spacer()
+
+                                        VStack(alignment: .trailing, spacing: 4) {
+                                            Text("Remaining")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                            Text(remainingAmount(for: goal).asCurrency())
+                                                .font(.headline)
+                                        }
+                                    }
+
+                                    HStack(spacing: 12) {
+                                        MetricCard(
+                                            title: "Saved",
+                                            value: savedAmount.asCurrency(),
+                                            subtitle: "This month",
+                                            icon: "leaf.fill",
+                                            tint: FinanceTheme.income
+                                        )
+
+                                        MetricCard(
+                                            title: "Progress",
+                                            value: progress(for: goal).asPercent(),
+                                            subtitle: "Of target",
+                                            icon: "speedometer",
+                                            tint: FinanceTheme.accent
+                                        )
+                                    }
+
+                                    Button("Edit Goal") {
+                                        editingGoal = goal
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(FinanceTheme.accent)
+                                    .accessibilityHint("Opens the monthly goal editor")
+                                }
+                            }
                         }
                     }
 
@@ -203,6 +207,14 @@ struct GoalView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 12)
             }
+            .disabled(isLoading)
+
+            if isLoading {
+                Color.black.opacity(0.08)
+                    .ignoresSafeArea()
+
+                LoadingStateView(message: "Loading goal insights...")
+            }
         }
         .navigationTitle("Savings Goal")
         .navigationBarTitleDisplayMode(.inline)
@@ -218,6 +230,7 @@ struct GoalView: View {
                         .background(FinanceTheme.accent.gradient, in: Circle())
                 }
                 .accessibilityLabel("Create monthly goal")
+                .accessibilityHint("Opens a form to create a savings goal")
             }
         }
         .sheet(isPresented: $showingGoalForm) {
@@ -227,6 +240,11 @@ struct GoalView: View {
         .sheet(item: $editingGoal) { goal in
             GoalFormView(goal: goal)
                 .presentationDetents([.medium, .large])
+        }
+        .task {
+            guard isLoading else { return }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            isLoading = false
         }
     }
 }

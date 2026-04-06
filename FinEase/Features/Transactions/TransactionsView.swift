@@ -5,14 +5,17 @@ struct TransactionsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \TransactionRecord.date, order: .reverse) private var transactions: [TransactionRecord]
 
+    @State private var isLoading = true
+    @State private var isDeleting = false
     @State private var showingAddSheet = false
     @State private var editingTransaction: TransactionRecord?
+    @State private var pendingDeleteTransactions: [TransactionRecord] = []
+    @State private var showingDeleteConfirmation = false
+    @State private var showingDeleteError = false
+    @State private var deleteErrorMessage = ""
     @State private var searchText = ""
     @State private var typeFilter: TransactionTypeFilter = .all
     @State private var categoryFilter: CategoryFilter = .all
-    @State private var isDateRangeEnabled = false
-    @State private var startDate = Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date()
-    @State private var endDate = Date()
 
     private struct TransactionGroup: Identifiable {
         let date: Date
@@ -30,13 +33,7 @@ struct TransactionsView: View {
                 return false
             }
 
-            if isDateRangeEnabled {
-                let start = startDate.startOfDay
-                let end = endDate.endOfDay
-                if transaction.date < start || transaction.date > end {
-                    return false
-                }
-            }
+
 
             if searchText.isEmpty {
                 return true
@@ -60,7 +57,7 @@ struct TransactionsView: View {
     }
 
     private var hasActiveFilters: Bool {
-        typeFilter != .all || categoryFilter != .all || isDateRangeEnabled || !searchText.isEmpty
+        typeFilter != .all || categoryFilter != .all || !searchText.isEmpty
     }
 
     private var monthStart: Date {
@@ -95,46 +92,7 @@ struct TransactionsView: View {
                         .listRowSeparator(.hidden)
                 }
 
-                Section("Filters") {
-                    Picker("Type", selection: $typeFilter) {
-                        ForEach(TransactionTypeFilter.allCases) { filter in
-                            Text(filter.rawValue).tag(filter)
-                        }
-                    }
-                    .pickerStyle(.segmented)
 
-                    Menu {
-                        ForEach(CategoryFilter.allCases) { filter in
-                            Button(filter.rawValue) {
-                                categoryFilter = filter
-                            }
-                        }
-                    } label: {
-                        HStack {
-                            Label("Category", systemImage: "line.3.horizontal.decrease.circle")
-                            Spacer()
-                            Text(categoryFilter.rawValue)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Toggle("Use date range", isOn: $isDateRangeEnabled)
-
-                    if isDateRangeEnabled {
-                        DatePicker("From", selection: $startDate, displayedComponents: .date)
-                        DatePicker("To", selection: $endDate, in: startDate..., displayedComponents: .date)
-                    }
-
-                    if hasActiveFilters {
-                        Button("Reset Filters") {
-                            typeFilter = .all
-                            categoryFilter = .all
-                            isDateRangeEnabled = false
-                            searchText = ""
-                        }
-                        .foregroundStyle(FinanceTheme.expense)
-                    }
-                }
 
                 if groupedTransactions.isEmpty {
                     Section {
@@ -156,9 +114,10 @@ struct TransactionsView: View {
                                     TransactionRowView(transaction: transaction, showChevron: true)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityHint("Double tap to edit this transaction")
                             }
                             .onDelete { offsets in
-                                deleteTransactions(at: offsets, from: group.items)
+                                prepareDelete(at: offsets, from: group.items)
                             }
                         }
                     }
@@ -167,8 +126,65 @@ struct TransactionsView: View {
             .scrollContentBackground(.hidden)
             .background(Color.clear)
             .listSectionSpacing(14)
+            .disabled(isLoading || isDeleting)
+            // Add top padding for our floating filter bar
+            .safeAreaPadding(.top, 50)
+            
+            // Custom floating filter bar
+            VStack {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        Menu {
+                            Picker("Type", selection: $typeFilter) {
+                                ForEach(TransactionTypeFilter.allCases) { filter in
+                                    Text(filter.rawValue).tag(filter)
+                                }
+                            }
+                        } label: {
+                            FilterChip(title: typeFilter == .all ? "Type" : typeFilter.rawValue, isActive: typeFilter != .all)
+                        }
+
+                        Menu {
+                            Picker("Category", selection: $categoryFilter) {
+                                ForEach(CategoryFilter.allCases) { filter in
+                                    Text(filter.rawValue).tag(filter)
+                                }
+                            }
+                        } label: {
+                            FilterChip(title: categoryFilter == .all ? "Category" : categoryFilter.rawValue, isActive: categoryFilter != .all)
+                        }
+                        
+                        if hasActiveFilters {
+                            Button(action: {
+                                withAnimation {
+                                    typeFilter = .all
+                                    categoryFilter = .all
+                                    searchText = ""
+                                }
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.white, FinanceTheme.expense)
+                                    .font(.title2)
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                }
+                .background(.ultraThinMaterial)
+                .overlay(Rectangle().frame(height: 1).foregroundStyle(.white.opacity(0.3)), alignment: .bottom)
+                
+                Spacer()
+            }
+
+            if isLoading || isDeleting {
+                Color.black.opacity(0.08)
+                    .ignoresSafeArea()
+
+                LoadingStateView(message: isDeleting ? "Deleting transaction..." : "Loading transactions...")
+            }
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
         .searchable(text: $searchText, prompt: "Search amount, category, notes")
         .navigationTitle("Transactions")
         .navigationBarTitleDisplayMode(.inline)
@@ -184,27 +200,87 @@ struct TransactionsView: View {
                         .background(FinanceTheme.accent.gradient, in: Circle())
                 }
                 .accessibilityLabel("Add transaction")
+                .accessibilityHint("Opens a form to create a new transaction")
             }
         }
-        .sheet(isPresented: $showingAddSheet) {
-            TransactionFormView()
-                .presentationDetents([.medium, .large])
+        .confirmationDialog(
+            pendingDeleteTransactions.count > 1 ? "Delete \(pendingDeleteTransactions.count) transactions?" : "Delete transaction?",
+            isPresented: $showingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                confirmDeleteTransactions()
+            }
+
+            Button("Cancel", role: .cancel) {
+                pendingDeleteTransactions = []
+            }
+        } message: {
+            Text("This action cannot be undone.")
         }
-        .sheet(item: $editingTransaction) { transaction in
+        .alert("Unable to Delete", isPresented: $showingDeleteError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(deleteErrorMessage)
+        }
+        .fullScreenCover(isPresented: $showingAddSheet) {
+            TransactionFormView()
+        }
+        .fullScreenCover(item: $editingTransaction) { transaction in
             TransactionFormView(transaction: transaction)
-                .presentationDetents([.medium, .large])
+        }
+        .task {
+            guard isLoading else { return }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            isLoading = false
         }
     }
 
-    private func deleteTransactions(at offsets: IndexSet, from source: [TransactionRecord]) {
-        for index in offsets {
-            modelContext.delete(source[index])
+    private func prepareDelete(at offsets: IndexSet, from source: [TransactionRecord]) {
+        pendingDeleteTransactions = offsets.compactMap { index in
+            guard source.indices.contains(index) else { return nil }
+            return source[index]
         }
+        showingDeleteConfirmation = !pendingDeleteTransactions.isEmpty
+    }
+
+    private func confirmDeleteTransactions() {
+        guard !pendingDeleteTransactions.isEmpty else { return }
+
+        isDeleting = true
+        defer { isDeleting = false }
+
+        for transaction in pendingDeleteTransactions {
+            modelContext.delete(transaction)
+        }
+
+        pendingDeleteTransactions = []
 
         do {
             try modelContext.save()
         } catch {
-            assertionFailure("Failed to delete transactions: \(error.localizedDescription)")
+            deleteErrorMessage = "Something went wrong while deleting the selected transaction."
+            showingDeleteError = true
         }
+    }
+}
+
+private struct FilterChip: View {
+    let title: String
+    let isActive: Bool
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+            Image(systemName: "chevron.down")
+                .font(.caption2)
+        }
+        .foregroundStyle(isActive ? .white : .primary)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(isActive ? FinanceTheme.accent : Color.white.opacity(0.8), in: Capsule())
+        .overlay(Capsule().stroke(isActive ? FinanceTheme.accent : .gray.opacity(0.3), lineWidth: 1))
+        .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
     }
 }

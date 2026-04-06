@@ -45,5 +45,8 @@ struct MetricCard: View {
                 .stroke(FinanceTheme.cardStroke, lineWidth: 1)
         )
         .shadow(color: FinanceTheme.cardShadow, radius: 10, y: 5)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), \(value)")
+        .accessibilityValue(subtitle)
     }
 }

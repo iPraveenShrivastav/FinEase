@@ -31,14 +31,26 @@ struct ContentView: View {
             .tabItem {
                 Label("Insights", systemImage: "chart.line.uptrend.xyaxis")
             }
+            
+            NavigationStack {
+                ProfileView()
+            }
+            .tabItem {
+                Label("Profile", systemImage: "person.crop.circle.fill")
+            }
         }
         .tint(FinanceTheme.accent)
         .toolbarBackground(.visible, for: .tabBar)
         .toolbarBackground(Color.white.opacity(0.98), for: .tabBar)
+        .onAppear {
+            Task {
+                await NotificationManager.shared.checkAuthorizationStatus()
+            }
+        }
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: [TransactionRecord.self, SavingsGoalRecord.self], inMemory: true)
+        .modelContainer(for: [TransactionRecord.self, SavingsGoalRecord.self, CustomCategoryRecord.self], inMemory: true)
 }

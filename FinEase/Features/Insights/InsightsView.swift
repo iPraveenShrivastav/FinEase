@@ -2,8 +2,115 @@ import SwiftUI
 import SwiftData
 import Charts
 
+struct SpendingHeatmapView: View {
+    let transactions: [TransactionRecord]
+    
+    // Matrix of Weeks. Each week has 7 days.
+    private var heatmapData: [[Date?]] {
+        let calendar = Calendar.current
+        let today = Date().startOfDay
+        let startOf90Days = calendar.date(byAdding: .day, value: -90, to: today)!
+        let firstDay = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: startOf90Days)) ?? startOf90Days
+        
+        var weeks: [[Date?]] = []
+        var currentWeek: [Date?] = []
+        var current = firstDay
+        
+        while current <= today {
+            if current < startOf90Days {
+                currentWeek.append(nil) // Empty cell outside 90 day window
+            } else {
+                currentWeek.append(current)
+            }
+            
+            if currentWeek.count == 7 {
+                weeks.append(currentWeek)
+                currentWeek = []
+            }
+            current = calendar.date(byAdding: .day, value: 1, to: current)!
+        }
+        
+        if !currentWeek.isEmpty {
+            while currentWeek.count < 7 {
+                currentWeek.append(nil)
+            }
+            weeks.append(currentWeek)
+        }
+        
+        return weeks
+    }
+
+    private func spending(for date: Date?) -> Double {
+        guard let date = date else { return 0 }
+        return transactions.filter {
+            $0.type == .expense && Calendar.current.isDate($0.date, inSameDayAs: date)
+        }.reduce(0) { $0 + $1.amount }
+    }
+
+    private var maxSpending: Double {
+        let calendar = Calendar.current
+        let today = Date().startOfDay
+        guard let start = calendar.date(byAdding: .day, value: -90, to: today) else { return 100 }
+        
+        let groups = Dictionary(grouping: transactions.filter { $0.type == .expense && $0.date >= start }) { $0.date.startOfDay }
+        let maxDay = groups.values.map { dayTxs in dayTxs.reduce(0) { $0 + $1.amount } }.max() ?? 100
+        return maxDay == 0 ? 1 : maxDay
+    }
+
+    private func color(for amount: Double) -> Color {
+        if amount <= 0 { return Color(.systemGray6) }
+        let ratio = amount / maxSpending
+        
+        if ratio <= 0.25 { return FinanceTheme.accent.opacity(0.3) }
+        if ratio <= 0.5 { return FinanceTheme.accent.opacity(0.6) }
+        if ratio <= 0.75 { return FinanceTheme.accent.opacity(0.8) }
+        return FinanceTheme.accent
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(0..<heatmapData.count, id: \.self) { weekIndex in
+                        let week = heatmapData[weekIndex]
+                        VStack(spacing: 4) {
+                            ForEach(0..<week.count, id: \.self) { dayIndex in
+                                let date = week[dayIndex]
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(date == nil ? Color.clear : color(for: spending(for: date)))
+                                    .frame(width: 14, height: 14)
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+            
+            // Legend
+            HStack(spacing: 6) {
+                Text("Less")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                
+                HStack(spacing: 4) {
+                    RoundedRectangle(cornerRadius: 3).fill(Color(.systemGray6)).frame(width: 12, height: 12)
+                    RoundedRectangle(cornerRadius: 3).fill(FinanceTheme.accent.opacity(0.3)).frame(width: 12, height: 12)
+                    RoundedRectangle(cornerRadius: 3).fill(FinanceTheme.accent.opacity(0.6)).frame(width: 12, height: 12)
+                    RoundedRectangle(cornerRadius: 3).fill(FinanceTheme.accent.opacity(0.8)).frame(width: 12, height: 12)
+                    RoundedRectangle(cornerRadius: 3).fill(FinanceTheme.accent).frame(width: 12, height: 12)
+                }
+                
+                Text("More")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
 struct InsightsView: View {
     @Query(sort: \TransactionRecord.date, order: .reverse) private var transactions: [TransactionRecord]
+    @State private var isLoading = true
 
     private var monthStart: Date {
         Date().startOfMonth
@@ -177,29 +284,21 @@ struct InsightsView: View {
                                 }
                             }
                             .frame(height: 220)
+                            .accessibilityLabel("Monthly expense trend chart")
+                            .accessibilityHint("Shows six months of expense totals")
                         }
 
-                        SurfaceCard(title: "Category Breakdown", subtitle: "This month") {
-                            if currentMonthExpenseByCategory.isEmpty {
+                        SurfaceCard(title: "Activity Heatmap", subtitle: "Daily spending intensity (Last 90 days)") {
+                            if transactions.isEmpty {
                                 EmptyStateView(
-                                    title: "No expense categories yet",
-                                    message: "Record an expense to view your category distribution.",
-                                    symbol: "chart.bar.xaxis"
+                                    title: "No data available",
+                                    message: "Keep recording transactions to see your spending map.",
+                                    symbol: "square.fill.on.square"
                                 )
                             } else {
-                                Chart(currentMonthExpenseByCategory) { point in
-                                    BarMark(
-                                        x: .value("Category", point.category.rawValue),
-                                        y: .value("Amount", point.amount)
-                                    )
-                                    .foregroundStyle(point.category.tint.gradient)
-                                }
-                                .chartXAxis {
-                                    AxisMarks { _ in
-                                        AxisValueLabel()
-                                    }
-                                }
-                                .frame(height: 220)
+                                SpendingHeatmapView(transactions: transactions)
+                                    .accessibilityLabel("Spending heat map")
+                                    .accessibilityHint("Shows spending intensity over the last 90 days")
                             }
                         }
                     }
@@ -207,8 +306,21 @@ struct InsightsView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 12)
             }
+            .disabled(isLoading)
+
+            if isLoading {
+                Color.black.opacity(0.08)
+                    .ignoresSafeArea()
+
+                LoadingStateView(message: "Loading insights...")
+            }
         }
         .navigationTitle("Insights")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard isLoading else { return }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            isLoading = false
+        }
     }
 }
