@@ -3,6 +3,7 @@ import SwiftData
 
 struct ProfileView: View {
     @Query(sort: \TransactionRecord.date, order: .reverse) private var transactions: [TransactionRecord]
+    @AppStorage("finEaseDarkModeEnabled") private var isDarkModeEnabled = false
     @State private var notificationManager = NotificationManager.shared
 
     var body: some View {
@@ -17,7 +18,7 @@ struct ProfileView: View {
                             .scaledToFit()
                             .frame(width: 80, height: 80)
                             .foregroundStyle(FinanceTheme.accent)
-                            .background(Circle().fill(.white))
+                            .background(Circle().fill(.background))
                             .overlay(Circle().stroke(FinanceTheme.accent.opacity(0.3), lineWidth: 2))
                             .shadow(color: FinanceTheme.accent.opacity(0.2), radius: 10, y: 4)
 
@@ -33,6 +34,12 @@ struct ProfileView: View {
                 }
 
                 Section("Preferences") {
+                    Toggle(isOn: $isDarkModeEnabled) {
+                        Label("Dark Mode", systemImage: "moon.fill")
+                            .foregroundStyle(.primary)
+                    }
+                    .tint(FinanceTheme.accent)
+
                     Toggle(isOn: Bindable(notificationManager).isDailyReminderEnabled) {
                         Label("Daily Reminder (8 PM)", systemImage: "bell.badge.fill")
                             .foregroundStyle(.primary)

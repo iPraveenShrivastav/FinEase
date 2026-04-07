@@ -2,6 +2,8 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @AppStorage("finEaseDarkModeEnabled") private var isDarkModeEnabled = false
+
     var body: some View {
         TabView {
             NavigationStack {
@@ -41,7 +43,8 @@ struct ContentView: View {
         }
         .tint(FinanceTheme.accent)
         .toolbarBackground(.visible, for: .tabBar)
-        .toolbarBackground(Color.white.opacity(0.98), for: .tabBar)
+        .toolbarBackground(.background, for: .tabBar)
+        .preferredColorScheme(isDarkModeEnabled ? .dark : .light)
         .onAppear {
             Task {
                 await NotificationManager.shared.checkAuthorizationStatus()
