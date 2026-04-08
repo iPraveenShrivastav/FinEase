@@ -4,107 +4,337 @@ import Charts
 
 struct SpendingHeatmapView: View {
     let transactions: [TransactionRecord]
-    
+    @Environment(\.colorScheme) private var colorScheme
+
+    private static let monthFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        formatter.dateFormat = "MMM"
+        return formatter
+    }()
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        formatter.dateFormat = "MMM d"
+        return formatter
+    }()
+
+    private static let weekdayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        return formatter
+    }()
+
+    private let daysToShow = 90
+    private let cellSize: CGFloat = 12
+    private let cellSpacing: CGFloat = 4
+
+    private var calendar: Calendar { Calendar.current }
+
+    private var today: Date {
+        Date().startOfDay
+    }
+
+    private var startDate: Date {
+        calendar.date(byAdding: .day, value: -(daysToShow - 1), to: today) ?? today
+    }
+
     // Matrix of Weeks. Each week has 7 days.
     private var heatmapData: [[Date?]] {
-        let calendar = Calendar.current
-        let today = Date().startOfDay
-        let startOf90Days = calendar.date(byAdding: .day, value: -90, to: today)!
-        let firstDay = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: startOf90Days)) ?? startOf90Days
-        
+        let firstDay = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: startDate)) ?? startDate
+
         var weeks: [[Date?]] = []
         var currentWeek: [Date?] = []
         var current = firstDay
-        
+
         while current <= today {
-            if current < startOf90Days {
-                currentWeek.append(nil) // Empty cell outside 90 day window
+            if current < startDate {
+                currentWeek.append(nil) // Empty cell outside window
             } else {
                 currentWeek.append(current)
             }
-            
+
             if currentWeek.count == 7 {
                 weeks.append(currentWeek)
                 currentWeek = []
             }
-            current = calendar.date(byAdding: .day, value: 1, to: current)!
+            current = calendar.date(byAdding: .day, value: 1, to: current) ?? current
         }
-        
+
         if !currentWeek.isEmpty {
             while currentWeek.count < 7 {
                 currentWeek.append(nil)
             }
             weeks.append(currentWeek)
         }
-        
+
         return weeks
     }
 
+    private var dailySpending: [Date: Double] {
+        var totals: [Date: Double] = [:]
+        for transaction in transactions where transaction.type == .expense && transaction.date >= startDate {
+            let day = transaction.date.startOfDay
+            totals[day, default: 0] += transaction.amount
+        }
+        return totals
+    }
+
     private func spending(for date: Date?) -> Double {
-        guard let date = date else { return 0 }
-        return transactions.filter {
-            $0.type == .expense && Calendar.current.isDate($0.date, inSameDayAs: date)
-        }.reduce(0) { $0 + $1.amount }
+        guard let date else { return 0 }
+        return dailySpending[date.startOfDay] ?? 0
     }
 
     private var maxSpending: Double {
-        let calendar = Calendar.current
-        let today = Date().startOfDay
-        guard let start = calendar.date(byAdding: .day, value: -90, to: today) else { return 100 }
-        
-        let groups = Dictionary(grouping: transactions.filter { $0.type == .expense && $0.date >= start }) { $0.date.startOfDay }
-        let maxDay = groups.values.map { dayTxs in dayTxs.reduce(0) { $0 + $1.amount } }.max() ?? 100
-        return maxDay == 0 ? 1 : maxDay
+        max(dailySpending.values.max() ?? 0, 1)
     }
 
     private func color(for amount: Double) -> Color {
-        if amount <= 0 { return Color(.systemGray6) }
-        let ratio = amount / maxSpending
-        
-        if ratio <= 0.25 { return FinanceTheme.accent.opacity(0.3) }
-        if ratio <= 0.5 { return FinanceTheme.accent.opacity(0.6) }
-        if ratio <= 0.75 { return FinanceTheme.accent.opacity(0.8) }
-        return FinanceTheme.accent
+        guard amount > 0 else { return Color(.systemGray6) }
+        let ratio = pow(amount / maxSpending, 0.7)
+        let baseOpacity = colorScheme == .dark ? 0.28 : 0.22
+        let maxOpacity = colorScheme == .dark ? 0.95 : 1.0
+        return FinanceTheme.accent.opacity(baseOpacity + (maxOpacity - baseOpacity) * ratio)
+    }
+
+    private func isToday(_ date: Date?) -> Bool {
+        guard let date else { return false }
+        return calendar.isDateInToday(date)
+    }
+
+    private var weekdaySymbols: [String] {
+        let symbols = Self.weekdayFormatter.shortWeekdaySymbols ?? calendar.shortWeekdaySymbols
+        guard !symbols.isEmpty else { return [] }
+        let firstIndex = max(0, calendar.firstWeekday - 1)
+        let ordered = Array(symbols[firstIndex...] + symbols[..<firstIndex])
+        return ordered.map { String($0.prefix(2)) }
+    }
+
+    private func dayLabel(for dayIndex: Int) -> String? {
+        let visibleRows: Set<Int> = [0, 2, 4, 6]
+        guard visibleRows.contains(dayIndex) else { return nil }
+        return weekdaySymbols.indices.contains(dayIndex) ? weekdaySymbols[dayIndex] : nil
+    }
+
+    private var monthLabels: [Int: String] {
+        var labels: [Int: String] = [:]
+        for (index, week) in heatmapData.enumerated() {
+            guard let date = week.compactMap({ $0 }).first else { continue }
+            let day = calendar.component(.day, from: date)
+            if day <= 7 {
+                labels[index] = Self.monthFormatter.string(from: date)
+            }
+        }
+        return labels
+    }
+
+    private var activeDayCount: Int {
+        dailySpending.count
+    }
+
+    private var averageDailySpend: Double {
+        guard activeDayCount > 0 else { return 0 }
+        let total = dailySpending.values.reduce(0, +)
+        return total / Double(activeDayCount)
+    }
+
+    private var peakDayLabel: String {
+        guard let peak = dailySpending.max(by: { $0.value < $1.value }) else {
+            return "No activity"
+        }
+        return Self.dayFormatter.string(from: peak.key)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    ForEach(0..<heatmapData.count, id: \.self) { weekIndex in
-                        let week = heatmapData[weekIndex]
-                        VStack(spacing: 4) {
-                            ForEach(0..<week.count, id: \.self) { dayIndex in
-                                let date = week[dayIndex]
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(date == nil ? Color.clear : color(for: spending(for: date)))
-                                    .frame(width: 14, height: 14)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 16) {
+                SpendingClockView(transactions: transactions)
+                VStack(alignment: .leading, spacing: 10) {
+                    HeatmapStatRow(title: "Active days", value: "\(activeDayCount) of \(daysToShow)")
+                    HeatmapStatRow(title: "Avg per active day", value: averageDailySpend.asCurrency())
+                    HeatmapStatRow(title: "Peak day", value: peakDayLabel)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .trailing, spacing: cellSpacing) {
+                    ForEach(0..<7, id: \.self) { dayIndex in
+                        let label = dayLabel(for: dayIndex)
+                        Text(label ?? " ")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(height: cellSize)
+                            .opacity(label == nil ? 0 : 1)
+                    }
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: cellSpacing) {
+                            ForEach(0..<heatmapData.count, id: \.self) { weekIndex in
+                                Text(monthLabels[weekIndex] ?? "")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: cellSize, alignment: .leading)
+                            }
+                        }
+
+                        HStack(spacing: cellSpacing) {
+                            ForEach(0..<heatmapData.count, id: \.self) { weekIndex in
+                                let week = heatmapData[weekIndex]
+                                VStack(spacing: cellSpacing) {
+                                    ForEach(0..<week.count, id: \.self) { dayIndex in
+                                        let date = week[dayIndex]
+                                        let amount = spending(for: date)
+                                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                            .fill(date == nil ? Color.clear : color(for: amount))
+                                            .frame(width: cellSize, height: cellSize)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                                    .stroke(
+                                                        FinanceTheme.cardStroke.opacity(date == nil ? 0 : 0.55),
+                                                        lineWidth: date == nil ? 0 : 0.6
+                                                    )
+                                            )
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                                    .stroke(isToday(date) ? FinanceTheme.accent.opacity(0.9) : Color.clear, lineWidth: 1)
+                                            )
+                                    }
+                                }
                             }
                         }
                     }
+                    .padding(.vertical, 4)
                 }
-                .padding(.vertical, 8)
             }
-            
-            // Legend
-            HStack(spacing: 6) {
+
+            HStack(spacing: 8) {
                 Text("Less")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                
-                HStack(spacing: 4) {
-                    RoundedRectangle(cornerRadius: 3).fill(Color(.systemGray6)).frame(width: 12, height: 12)
-                    RoundedRectangle(cornerRadius: 3).fill(FinanceTheme.accent.opacity(0.3)).frame(width: 12, height: 12)
-                    RoundedRectangle(cornerRadius: 3).fill(FinanceTheme.accent.opacity(0.6)).frame(width: 12, height: 12)
-                    RoundedRectangle(cornerRadius: 3).fill(FinanceTheme.accent.opacity(0.8)).frame(width: 12, height: 12)
-                    RoundedRectangle(cornerRadius: 3).fill(FinanceTheme.accent).frame(width: 12, height: 12)
-                }
-                
+
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(.systemGray6), FinanceTheme.accent],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: 120, height: 10)
+                    .overlay(
+                        Capsule()
+                            .stroke(FinanceTheme.cardStroke.opacity(0.6), lineWidth: 0.6)
+                    )
+
                 Text("More")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+private struct HeatmapStatRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                .monospacedDigit()
+        }
+    }
+}
+
+private struct SpendingClockView: View {
+    let transactions: [TransactionRecord]
+
+    private static let hourFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        formatter.dateFormat = "h a"
+        return formatter
+    }()
+
+    private let ringWidth: CGFloat = 12
+    private let segmentInset: Double = 0.004
+
+    private var calendar: Calendar { Calendar.current }
+
+    private var startDate: Date {
+        calendar.date(byAdding: .day, value: -30, to: Date().startOfDay) ?? Date()
+    }
+
+    private var hourlyTotals: [Double] {
+        var totals = Array(repeating: 0.0, count: 24)
+        for transaction in transactions where transaction.type == .expense && transaction.date >= startDate {
+            let hour = calendar.component(.hour, from: transaction.date)
+            totals[hour] += transaction.amount
+        }
+        return totals
+    }
+
+    private var maxTotal: Double {
+        max(hourlyTotals.max() ?? 0, 1)
+    }
+
+    private var peakHour: Int? {
+        guard let maxValue = hourlyTotals.max(), maxValue > 0 else { return nil }
+        return hourlyTotals.firstIndex(of: maxValue)
+    }
+
+    private var peakLabel: String {
+        guard let hour = peakHour,
+              let date = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: Date())
+        else {
+            return "No activity"
+        }
+        return Self.hourFormatter.string(from: date)
+    }
+
+    private func color(for hour: Int) -> Color {
+        let value = hourlyTotals[hour]
+        guard value > 0 else { return Color(.systemGray5) }
+        let ratio = pow(value / maxTotal, 0.7)
+        return FinanceTheme.accent.opacity(0.25 + 0.75 * ratio)
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(FinanceTheme.cardStroke.opacity(0.7), lineWidth: ringWidth)
+
+            ForEach(0..<24, id: \.self) { hour in
+                let start = (Double(hour) / 24.0) + segmentInset
+                let end = (Double(hour + 1) / 24.0) - segmentInset
+                Circle()
+                    .trim(from: start, to: end)
+                    .stroke(color(for: hour), style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+
+            VStack(spacing: 4) {
+                Text("Peak hour")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(peakLabel)
+                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                    .monospacedDigit()
+            }
+        }
+        .frame(width: 120, height: 120)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Spending by hour")
+        .accessibilityValue(peakLabel)
+        .accessibilityHint("Shows the most active spending hours over the last 30 days")
     }
 }
 

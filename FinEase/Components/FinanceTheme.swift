@@ -25,16 +25,30 @@ enum FinanceTheme {
     static let heroBottom = Color(red: 0.06, green: 0.42, blue: 0.39)
 
     static let cardFill = dynamicColor(
-        light: UIColor(white: 1.0, alpha: 0.70),
-        dark: UIColor(red: 0.12, green: 0.14, blue: 0.17, alpha: 0.92)
+        light: UIColor(white: 1.0, alpha: 0.82),
+        dark: UIColor(red: 0.12, green: 0.14, blue: 0.17, alpha: 0.96)
     )
     static let cardStroke = dynamicColor(
-        light: UIColor(white: 1.0, alpha: 0.90),
-        dark: UIColor(white: 1.0, alpha: 0.10)
+        light: UIColor(white: 1.0, alpha: 0.78),
+        dark: UIColor(white: 1.0, alpha: 0.14)
     )
     static let cardShadow = dynamicColor(
-        light: UIColor(white: 0.0, alpha: 0.04),
-        dark: UIColor(white: 0.0, alpha: 0.50)
+        light: UIColor(white: 0.0, alpha: 0.08),
+        dark: UIColor(white: 0.0, alpha: 0.55)
+    )
+    static let cardHighlight = LinearGradient(
+        colors: [
+            dynamicColor(
+                light: UIColor(white: 1.0, alpha: 0.85),
+                dark: UIColor(white: 1.0, alpha: 0.12)
+            ),
+            dynamicColor(
+                light: UIColor(white: 1.0, alpha: 0.10),
+                dark: UIColor(white: 1.0, alpha: 0.02)
+            )
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
     )
 
     static let screenGradient = LinearGradient(
