@@ -29,6 +29,7 @@ struct MetricCard: View {
                 .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
+                .monospacedDigit()
 
             Text(subtitle)
                 .font(.caption2)
@@ -39,12 +40,27 @@ struct MetricCard: View {
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(FinanceTheme.cardFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(FinanceTheme.cardHighlight)
+                        .blendMode(.overlay)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [tint.opacity(0.18), .clear],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(FinanceTheme.cardStroke, lineWidth: 1)
         )
-        .shadow(color: FinanceTheme.cardShadow, radius: 10, y: 5)
+        .shadow(color: FinanceTheme.cardShadow, radius: 12, y: 6)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title), \(value)")
         .accessibilityValue(subtitle)
