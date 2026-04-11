@@ -6,13 +6,6 @@ struct SpendingHeatmapView: View {
     let transactions: [TransactionRecord]
     @Environment(\.colorScheme) private var colorScheme
 
-    private static let monthFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale.current
-        formatter.dateFormat = "MMM"
-        return formatter
-    }()
-
     private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale.current
@@ -20,15 +13,34 @@ struct SpendingHeatmapView: View {
         return formatter
     }()
 
-    private static let weekdayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale.current
-        return formatter
-    }()
+    private let daysToShow = 30
+    private let cellSize: CGFloat = 15
+    private let cellSpacing: CGFloat = 7
+    private let panelCornerRadius: CGFloat = 18
+    private let panelPadding: CGFloat = 14
 
-    private let daysToShow = 90
-    private let cellSize: CGFloat = 12
-    private let cellSpacing: CGFloat = 4
+    private var panelFillOpacity: Double {
+        colorScheme == .dark ? 0.92 : 0.98
+    }
+
+    private var panelStrokeOpacity: Double {
+        colorScheme == .dark ? 0.45 : 0.3
+    }
+
+    private var emptyCellColor: Color {
+        colorScheme == .dark ? Color.white.opacity(0.14) : Color.white.opacity(0.96)
+    }
+
+    private var placeholderCellColor: Color {
+        colorScheme == .dark ? Color.white.opacity(0.06) : Color.white.opacity(0.9)
+    }
+
+    private var statColumns: [GridItem] {
+        [
+            GridItem(.flexible(), spacing: 10),
+            GridItem(.flexible(), spacing: 10)
+        ]
+    }
 
     private var calendar: Calendar { Calendar.current }
 
@@ -91,7 +103,7 @@ struct SpendingHeatmapView: View {
     }
 
     private func color(for amount: Double) -> Color {
-        guard amount > 0 else { return Color(.systemGray6) }
+        guard amount > 0 else { return emptyCellColor }
         let ratio = pow(amount / maxSpending, 0.7)
         let baseOpacity = colorScheme == .dark ? 0.28 : 0.22
         let maxOpacity = colorScheme == .dark ? 0.95 : 1.0
@@ -103,30 +115,14 @@ struct SpendingHeatmapView: View {
         return calendar.isDateInToday(date)
     }
 
-    private var weekdaySymbols: [String] {
-        let symbols = Self.weekdayFormatter.shortWeekdaySymbols ?? calendar.shortWeekdaySymbols
-        guard !symbols.isEmpty else { return [] }
-        let firstIndex = max(0, calendar.firstWeekday - 1)
-        let ordered = Array(symbols[firstIndex...] + symbols[..<firstIndex])
-        return ordered.map { String($0.prefix(2)) }
-    }
-
-    private func dayLabel(for dayIndex: Int) -> String? {
-        let visibleRows: Set<Int> = [0, 2, 4, 6]
-        guard visibleRows.contains(dayIndex) else { return nil }
-        return weekdaySymbols.indices.contains(dayIndex) ? weekdaySymbols[dayIndex] : nil
-    }
-
-    private var monthLabels: [Int: String] {
-        var labels: [Int: String] = [:]
-        for (index, week) in heatmapData.enumerated() {
-            guard let date = week.compactMap({ $0 }).first else { continue }
-            let day = calendar.component(.day, from: date)
-            if day <= 7 {
-                labels[index] = Self.monthFormatter.string(from: date)
-            }
-        }
-        return labels
+    private func panelBackground(cornerRadius: CGFloat? = nil) -> some View {
+        let radius = cornerRadius ?? panelCornerRadius
+        return RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(FinanceTheme.cardFill.opacity(panelFillOpacity))
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(FinanceTheme.cardStroke.opacity(panelStrokeOpacity), lineWidth: 0.8)
+            )
     }
 
     private var activeDayCount: Int {
@@ -147,71 +143,60 @@ struct SpendingHeatmapView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .center, spacing: 16) {
                 SpendingClockView(transactions: transactions)
-                VStack(alignment: .leading, spacing: 10) {
+                Divider()
+                    .frame(height: 88)
+                    .opacity(0.6)
+                LazyVGrid(columns: statColumns, alignment: .leading, spacing: 10) {
                     HeatmapStatRow(title: "Active days", value: "\(activeDayCount) of \(daysToShow)")
-                    HeatmapStatRow(title: "Avg per active day", value: averageDailySpend.asCurrency())
+                    HeatmapStatRow(title: "Avg per day", value: averageDailySpend.asCurrency())
                     HeatmapStatRow(title: "Peak day", value: peakDayLabel)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .padding(panelPadding)
+            .background(panelBackground())
 
-            HStack(alignment: .top, spacing: 8) {
-                VStack(alignment: .trailing, spacing: cellSpacing) {
-                    ForEach(0..<7, id: \.self) { dayIndex in
-                        let label = dayLabel(for: dayIndex)
-                        Text(label ?? " ")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .frame(height: cellSize)
-                            .opacity(label == nil ? 0 : 1)
-                    }
-                }
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: cellSpacing) {
-                            ForEach(0..<heatmapData.count, id: \.self) { weekIndex in
-                                Text(monthLabels[weekIndex] ?? "")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: cellSize, alignment: .leading)
-                            }
-                        }
-
-                        HStack(spacing: cellSpacing) {
-                            ForEach(0..<heatmapData.count, id: \.self) { weekIndex in
-                                let week = heatmapData[weekIndex]
-                                VStack(spacing: cellSpacing) {
-                                    ForEach(0..<week.count, id: \.self) { dayIndex in
-                                        let date = week[dayIndex]
-                                        let amount = spending(for: date)
-                                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                            .fill(date == nil ? Color.clear : color(for: amount))
-                                            .frame(width: cellSize, height: cellSize)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                                    .stroke(
-                                                        FinanceTheme.cardStroke.opacity(date == nil ? 0 : 0.55),
-                                                        lineWidth: date == nil ? 0 : 0.6
-                                                    )
-                                            )
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                                    .stroke(isToday(date) ? FinanceTheme.accent.opacity(0.9) : Color.clear, lineWidth: 1)
-                                            )
-                                    }
-                                }
-                            }
+            HStack(alignment: .top, spacing: 0) {
+                ForEach(0..<heatmapData.count, id: \.self) { weekIndex in
+                    let week = heatmapData[weekIndex]
+                    VStack(spacing: cellSpacing) {
+                        ForEach(0..<week.count, id: \.self) { dayIndex in
+                            let date = week[dayIndex]
+                            let amount = spending(for: date)
+                                let isPlaceholder = date == nil
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                    .fill(isPlaceholder ? placeholderCellColor : color(for: amount))
+                                .frame(width: cellSize, height: cellSize)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                        .stroke(
+                                                FinanceTheme.cardStroke.opacity(isPlaceholder ? 0.28 : 0.55),
+                                                lineWidth: isPlaceholder ? 0.5 : 0.6
+                                        )
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                        .stroke(isToday(date) ? FinanceTheme.accent.opacity(0.9) : Color.clear, lineWidth: 1.2)
+                                        .shadow(color: isToday(date) ? FinanceTheme.accent.opacity(0.35) : .clear, radius: 4)
+                                )
                         }
                     }
-                    .padding(.vertical, 4)
+
+                    if weekIndex < heatmapData.count - 1 {
+                        Spacer(minLength: cellSpacing)
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 8)
+            .padding(panelPadding)
+            .background(panelBackground())
 
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Text("Less")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -219,12 +204,12 @@ struct SpendingHeatmapView: View {
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [Color(.systemGray6), FinanceTheme.accent],
+                            colors: [emptyCellColor, FinanceTheme.accent],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
-                    .frame(width: 120, height: 10)
+                    .frame(width: 160, height: 10)
                     .overlay(
                         Capsule()
                             .stroke(FinanceTheme.cardStroke.opacity(0.6), lineWidth: 0.6)
@@ -234,6 +219,9 @@ struct SpendingHeatmapView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(panelBackground(cornerRadius: 12))
         }
     }
 }
@@ -243,7 +231,7 @@ private struct HeatmapStatRow: View {
     let value: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -251,6 +239,17 @@ private struct HeatmapStatRow: View {
                 .font(.system(.subheadline, design: .rounded).weight(.semibold))
                 .monospacedDigit()
         }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(FinanceTheme.cardFill.opacity(0.7))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(FinanceTheme.cardStroke.opacity(0.55), lineWidth: 0.8)
+        )
     }
 }
 
@@ -518,7 +517,7 @@ struct InsightsView: View {
                             .accessibilityHint("Shows six months of expense totals")
                         }
 
-                        SurfaceCard(title: "Activity Heatmap", subtitle: "Daily spending intensity (Last 90 days)") {
+                        SurfaceCard(title: "Activity Heatmap", subtitle: "Daily spending intensity (Last 30 days)") {
                             if transactions.isEmpty {
                                 EmptyStateView(
                                     title: "No data available",
@@ -528,7 +527,7 @@ struct InsightsView: View {
                             } else {
                                 SpendingHeatmapView(transactions: transactions)
                                     .accessibilityLabel("Spending heat map")
-                                    .accessibilityHint("Shows spending intensity over the last 90 days")
+                                    .accessibilityHint("Shows spending intensity over the last 30 days")
                             }
                         }
                     }
