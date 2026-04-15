@@ -41,6 +41,27 @@ struct GoalView: View {
         max(0, monthIncome - monthExpense)
     }
 
+    private var monthTitle: String {
+        monthStart.formatted(.dateTime.month(.wide).year())
+    }
+
+    private var savingsTone: String {
+        if savedAmount == 0 {
+            return "Start strong with your first intentional save this month."
+        }
+
+        if let firstGoal = activeGoals.first {
+            if progress(for: firstGoal) >= 1 {
+                return "Excellent momentum. You have already reached your active goal."
+            }
+            if progress(for: firstGoal) >= 0.75 {
+                return "You are very close. Keep this pace for the final stretch."
+            }
+        }
+
+        return "Steady progress compounds. Every no-spend day gives this target more room."
+    }
+
     private func progress(for goal: SavingsGoalRecord) -> Double {
         guard goal.targetAmount > 0 else { return 0 }
         return min(savedAmount / goal.targetAmount, 1)
@@ -96,12 +117,104 @@ struct GoalView: View {
         return max(0, value)
     }
 
+    private func statusMeta(for goal: SavingsGoalRecord) -> (label: String, icon: String, tint: Color) {
+        let value = progress(for: goal)
+
+        if value >= 1 {
+            return ("Completed", "checkmark.seal.fill", FinanceTheme.income)
+        }
+        if value >= 0.75 {
+            return ("Almost There", "sparkles", FinanceTheme.accent)
+        }
+        if value >= 0.4 {
+            return ("On Track", "bolt.fill", .orange)
+        }
+        return ("Needs Focus", "flag.fill", .red)
+    }
+
+    private var streakMessage: String {
+        if activeNoSpendStreak == 0 {
+            return "Start a new no-spend streak today to boost your monthly savings."
+        }
+        return "Great discipline. Your current no-spend streak is helping your goal."
+    }
+
     var body: some View {
         ZStack {
             FinanceScreenBackground()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(monthTitle) Focus")
+                                    .font(.system(.headline, design: .rounded).weight(.bold))
+                                Text(savingsTone)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white.opacity(0.85))
+                            }
+
+                            Spacer()
+
+                            Text("\(daysLeftThisMonth)d left")
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(.white.opacity(0.18), in: Capsule())
+                        }
+
+                        HStack(spacing: 10) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Saved")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.72))
+                                Text(savedAmount.asCurrency())
+                                    .font(.system(.title3, design: .rounded).weight(.bold))
+                                    .monospacedDigit()
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Active Goals")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.72))
+                                Text("\(activeGoals.count)")
+                                    .font(.system(.title3, design: .rounded).weight(.bold))
+                                    .monospacedDigit()
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .foregroundStyle(.white)
+                    .padding(18)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [FinanceTheme.heroTop.opacity(0.96), FinanceTheme.heroBottom.opacity(0.96)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [.white.opacity(0.25), .clear],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(.white.opacity(0.25), lineWidth: 1)
+                    )
+                    .shadow(color: FinanceTheme.cardShadow, radius: 14, y: 8)
+
                     SurfaceCard(title: "Monthly Challenge", subtitle: "\(daysLeftThisMonth) days left this month") {
                         Text("Stay intentional with spending and keep building your savings habit one day at a time.")
                             .font(.subheadline)
@@ -116,18 +229,52 @@ struct GoalView: View {
                                 symbol: "target"
                             )
 
-                            Button("Create Goal") {
+                            Button {
                                 showingGoalForm = true
+                            } label: {
+                                Label("Create Goal", systemImage: "plus.circle.fill")
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
                             .tint(FinanceTheme.accent)
                             .accessibilityHint("Creates a new monthly savings goal")
                         }
                     } else {
                         ForEach(activeGoals) { goal in
                             SurfaceCard(title: goal.title, subtitle: goal.monthLabel) {
+                                let status = statusMeta(for: goal)
+
                                 VStack(spacing: 16) {
+                                    HStack {
+                                        Label(status.label, systemImage: status.icon)
+                                            .font(.caption.weight(.semibold))
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 6)
+                                            .foregroundStyle(status.tint)
+                                            .background(status.tint.opacity(0.14), in: Capsule())
+
+                                        Spacer()
+
+                                        Text(progress(for: goal).asPercent())
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .monospacedDigit()
+                                    }
+
                                     GoalProgressRing(progress: progress(for: goal))
+
+                                    ProgressView(value: progress(for: goal))
+                                        .tint(status.tint)
+                                        .scaleEffect(x: 1, y: 1.2, anchor: .center)
+
+                                    Text(progress(for: goal) >= 1
+                                         ? "Target achieved for this month. You can stretch it even further."
+                                         : "\(remainingAmount(for: goal).asCurrency()) left to complete this challenge.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
 
                                     HStack {
                                         VStack(alignment: .leading, spacing: 4) {
@@ -167,10 +314,15 @@ struct GoalView: View {
                                         )
                                     }
 
-                                    Button("Edit Goal") {
+                                    Button {
                                         editingGoal = goal
+                                    } label: {
+                                        Label("Edit Goal", systemImage: "square.and.pencil")
+                                            .fontWeight(.semibold)
+                                            .frame(maxWidth: .infinity)
                                     }
                                     .buttonStyle(.borderedProminent)
+                                    .controlSize(.large)
                                     .tint(FinanceTheme.accent)
                                     .accessibilityHint("Opens the monthly goal editor")
                                 }
@@ -196,6 +348,11 @@ struct GoalView: View {
                                 tint: .orange
                             )
                         }
+
+                        Text(streakMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
                     SurfaceCard(title: "How This Goal Works") {
