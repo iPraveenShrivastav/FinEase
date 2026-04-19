@@ -19,25 +19,60 @@ struct SpendingBubbleMatrixView: View {
     @State private var animateDots = false
 
     private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "MMM d"
-        return f
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        formatter.dateFormat = "MMM d"
+        return formatter
     }()
 
-    private let daysToShow = 35
+    private let daysToShow = 35 // 5 weeks
     private let cellSpacing: CGFloat = 12
 
     private var calendar: Calendar { Calendar.current }
-    private var today: Date { Date().startOfDay }
+
+    private var today: Date {
+        Date().startOfDay
+    }
 
     private var startDate: Date {
         calendar.date(byAdding: .day, value: -(daysToShow - 1), to: today) ?? today
     }
 
+    private var heatmapData: [[Date?]] {
+        let firstDay = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: startDate)) ?? startDate
+
+        var weeks: [[Date?]] = []
+        var currentWeek: [Date?] = []
+        var current = firstDay
+
+        while current <= today {
+            if current < startDate {
+                currentWeek.append(nil)
+            } else {
+                currentWeek.append(current)
+            }
+
+            if currentWeek.count == 7 {
+                weeks.append(currentWeek)
+                currentWeek = []
+            }
+            current = calendar.date(byAdding: .day, value: 1, to: current) ?? current
+        }
+
+        if !currentWeek.isEmpty {
+            while currentWeek.count < 7 {
+                currentWeek.append(nil)
+            }
+            weeks.append(currentWeek)
+        }
+        return weeks
+    }
+
     private var dailySpending: [Date: Double] {
         var totals: [Date: Double] = [:]
-        for t in transactions where t.type == .expense && t.date >= startDate {
-            totals[t.date.startOfDay, default: 0] += t.amount
+        for transaction in transactions where transaction.type == .expense && transaction.date >= startDate {
+            let day = transaction.date.startOfDay
+            totals[day, default: 0] += transaction.amount
         }
         return totals
     }
@@ -51,50 +86,97 @@ struct SpendingBubbleMatrixView: View {
         max(dailySpending.values.max() ?? 0, 1)
     }
 
+    // Dynamic Sizing Map
     private func dotSize(for amount: Double) -> CGFloat {
         guard amount > 0 else { return 6 }
-        return 8 + CGFloat(amount / maxSpending) * 10
+        let ratio = amount / maxSpending
+        return 8 + (CGFloat(ratio) * 10) // Size between 8 and 18
     }
 
+    // Color Opacity Map
     private func dotColor(for amount: Double) -> Color {
         guard amount > 0 else {
-            return colorScheme == .dark ? .white.opacity(0.08) : .black.opacity(0.04)
+            return colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.04)
         }
-        return FinanceTheme.accent.opacity(0.3 + 0.7 * (amount / maxSpending))
+        let ratio = amount / maxSpending
+        let baseOpacity = colorScheme == .dark ? 0.4 : 0.3
+        return FinanceTheme.accent.opacity(baseOpacity + (1.0 - baseOpacity) * ratio)
+    }
+
+    private func dotGlowRadius(for amount: Double) -> CGFloat {
+        let ratio = amount / maxSpending
+        return ratio > 0.7 ? 6 : 0
+    }
+
+    private func isToday(_ date: Date?) -> Bool {
+        guard let date = date else { return false }
+        return calendar.isDateInToday(date)
+    }
+
+    private var activeDayCount: Int { dailySpending.count }
+    private var averageDailySpend: Double {
+        guard activeDayCount > 0 else { return 0 }
+        return dailySpending.values.reduce(0, +) / Double(activeDayCount)
+    }
+
+    private var peakDayLabel: String {
+        guard let peak = dailySpending.max(by: { $0.value < $1.value }) else { return "None" }
+        return Self.dayFormatter.string(from: peak.key)
     }
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 24) {
+            // The Bubble Matrix Engine
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: cellSpacing) {
-                    ForEach(Array(dailySpending.keys.sorted()), id: \.self) { date in
-                        let amount = dailySpending[date] ?? 0
-
-                        Circle()
-                            .fill(dotColor(for: amount))
-                            .frame(width: dotSize(for: amount), height: dotSize(for: amount))
-                            .scaleEffect(animateDots ? 1 : 0.6)
-                            .opacity(animateDots ? 1 : 0)
-                            .shadow(color: dotColor(for: amount).opacity(0.4), radius: 4)
-                            .onTapGesture {
-                                HapticManager.shared.impact(style: .soft)
+                HStack(alignment: .center, spacing: cellSpacing) {
+                    ForEach(0..<heatmapData.count, id: \.self) { weekIndex in
+                        let week = heatmapData[weekIndex]
+                        VStack(alignment: .center, spacing: cellSpacing) {
+                            ForEach(0..<week.count, id: \.self) { dayIndex in
+                                let date = week[dayIndex]
+                                let amount = spending(for: date)
+                                let isPlaceholder = date == nil
+                                
+                                ZStack {
+                                    if isPlaceholder {
+                                        Circle()
+                                            .fill(Color.clear)
+                                            .frame(width: 18, height: 18)
+                                    } else {
+                                        let size = dotSize(for: amount)
+                                        Circle()
+                                            .fill(dotColor(for: amount))
+                                            .frame(width: animateDots ? size : 0, height: animateDots ? size : 0)
+                                            .shadow(color: dotColor(for: amount).opacity(0.8), radius: dotGlowRadius(for: amount))
+                                            .overlay(
+                                                Circle()
+                                                    .stroke(FinanceTheme.accent, lineWidth: isToday(date) ? 1.5 : 0)
+                                                    .padding(-4)
+                                                    .opacity(isToday(date) ? 0.8 : 0)
+                                            )
+                                    }
+                                }
+                                .frame(width: 18, height: 18) // Container remains static for alignment
                             }
+                        }
+                        .onAppear {
+                            withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(Double(weekIndex) * 0.05)) {
+                                animateDots = true
+                            }
+                        }
                     }
                 }
                 .padding(.vertical, 8)
             }
+            .accessibilityLabel("Activity Bubble Matrix")
+            
+            Divider().opacity(0.5)
 
-            Divider().opacity(0.4)
-
-            // Stats Improved
-            HStack(spacing: 16) {
-                BubbleMatrixStatView(title: "Active Days", value: "\(dailySpending.count)", icon: "flame.fill", tint: .orange)
-                BubbleMatrixStatView(title: "Avg Spend", value: dailySpending.values.reduce(0,+).asCurrency(), icon: "chart.bar.fill", tint: FinanceTheme.accent)
-            }
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                animateDots = true
+            // Matrix Stats
+            HStack(spacing: 20) {
+                BubbleMatrixStatView(title: "Active Days", value: "\(activeDayCount)", icon: "flame.fill", tint: .orange)
+                BubbleMatrixStatView(title: "Avg Spend", value: averageDailySpend.asCurrency(), icon: "chart.bar.fill", tint: FinanceTheme.accent)
+                BubbleMatrixStatView(title: "Peak Day", value: peakDayLabel, icon: "star.fill", tint: .yellow)
             }
         }
     }
@@ -108,12 +190,18 @@ private struct BubbleMatrixStatView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(title.uppercased(), systemImage: icon)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                    .foregroundStyle(tint)
+                Text(title)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+            }
             Text(value)
-                .font(.system(.headline, design: .rounded).weight(.bold))
+                .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                .monospacedDigit()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

@@ -5,20 +5,19 @@ struct TransactionRowView: View {
     let showChevron: Bool
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 14) {
             ZStack {
                 Circle()
-                    .fill(transaction.displayTint.opacity(0.18))
-                    .frame(width: 44, height: 44)
-                Image(systemName: transaction.displayIcon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(transaction.displayTint)
+                    .fill(transaction.category.tint.opacity(0.18))
+                    .frame(width: 38, height: 38)
+                Image(systemName: transaction.category.icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(transaction.category.tint)
             }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(transaction.notes.isEmpty ? transaction.displayCategoryName : transaction.notes)
-                    .font(.body.weight(.bold))
-                    .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(transaction.notes.isEmpty ? transaction.category.rawValue : transaction.notes)
+                    .font(.subheadline.weight(.bold))
                     .lineLimit(1)
                 Text(transaction.date.formatted(date: .abbreviated, time: .omitted))
                     .font(.caption)
@@ -27,26 +26,24 @@ struct TransactionRowView: View {
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .trailing, spacing: 2) {
                 Text(amountLabel)
-                    .font(.callout.weight(.heavy))
+                    .font(.subheadline.weight(.heavy))
                     .monospacedDigit()
                     .foregroundStyle(transaction.type.tint)
                 Text(transaction.type.rawValue)
-                    .font(.caption2.weight(.medium))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if showChevron {
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(Color(.tertiaryLabel))
-                    .padding(.leading, 4)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 4)
         .contentShape(Rectangle())
+        .padding(.vertical, 6)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabelText)
         .accessibilityHint(showChevron ? "Double tap to edit this transaction" : "Recent transaction summary")
@@ -58,7 +55,7 @@ struct TransactionRowView: View {
     }
 
     private var accessibilityLabelText: String {
-        let title = transaction.notes.isEmpty ? transaction.displayCategoryName : transaction.notes
+        let title = transaction.notes.isEmpty ? transaction.category.rawValue : transaction.notes
         return "\(transaction.type.rawValue) transaction, \(title), \(amountLabel), on \(transaction.date.formatted(date: .long, time: .omitted))"
     }
 }
