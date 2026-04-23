@@ -281,10 +281,10 @@ struct DashboardView: View {
             isLoading = false
         }
         .fullScreenCover(isPresented: $showingAddExpense) {
-            TransactionFormView()
+            TransactionFormView(initialType: .expense)
         }
         .fullScreenCover(isPresented: $showingAddIncome) {
-            TransactionFormView()
+            TransactionFormView(initialType: .income)
         }
     }
 

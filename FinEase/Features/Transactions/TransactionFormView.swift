@@ -10,6 +10,7 @@ struct TransactionFormView: View {
     @State private var amountText: String
     @State private var date: Date
     @State private var notes: String
+    @State private var transactionType: TransactionType
     
     // Category states
     @State private var selectedFinanceCategory: FinanceCategory?
@@ -22,11 +23,12 @@ struct TransactionFormView: View {
     @State private var isCategorySheetPresented = false
     @State private var isDatePickerPresented = false
     
-    init(transaction: TransactionRecord? = nil) {
+    init(transaction: TransactionRecord? = nil, initialType: TransactionType = .expense) {
         self.transaction = transaction
         _amountText = State(initialValue: transaction.map { String(format: "%.0f", $0.amount) } ?? "")
         _date = State(initialValue: transaction?.date ?? Date())
         _notes = State(initialValue: transaction?.notes ?? "")
+        _transactionType = State(initialValue: transaction?.type ?? initialType)
 
         // Initialize category selection states from the provided transaction
         if let transaction = transaction {
@@ -47,13 +49,21 @@ struct TransactionFormView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
+                Button("Cancel") { dismiss() }
+                    .foregroundStyle(.secondary)
+                
                 Spacer()
                 
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark")
-                        .font(.title2)
-                        .foregroundStyle(.primary)
+                Picker("Type", selection: $transactionType) {
+                    Text("Expense").tag(TransactionType.expense)
+                    Text("Income").tag(TransactionType.income)
                 }
+                .pickerStyle(.segmented)
+                .frame(width: 160)
+                
+                Spacer()
+                
+                Text("Cancel").opacity(0).accessibilityHidden(true)
             }
             .padding(.horizontal, 24)
             .padding(.top, 24)
@@ -173,24 +183,13 @@ struct TransactionFormView: View {
             .scrollIndicators(.hidden)
             
             // Action Buttons
-            HStack(spacing: 12) {
-                Button(action: { saveTransaction(as: .expense) }) {
-                    Text("Expense")
-                        .font(.headline.weight(.bold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
-                        .background(FinanceTheme.expense, in: Capsule())
-                        .foregroundStyle(.white)
-                }
-                
-                Button(action: { saveTransaction(as: .income) }) {
-                    Text("Income")
-                        .font(.headline.weight(.bold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
-                        .background(FinanceTheme.income.opacity(0.15), in: Capsule())
-                        .foregroundStyle(FinanceTheme.income)
-                }
+            Button(action: { saveTransaction() }) {
+                Text(transaction != nil ? "Save Changes" : "Save \(transactionType.rawValue)")
+                    .font(.headline.weight(.bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 18)
+                    .background(transactionType.tint, in: Capsule())
+                    .foregroundStyle(.white)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
@@ -239,7 +238,7 @@ struct TransactionFormView: View {
         }
     }
     
-    private func saveTransaction(as type: TransactionType) {
+    private func saveTransaction() {
         let normalizedText = amountText.replacingOccurrences(of: ",", with: ".")
         guard let amount = Double(normalizedText), amount > 0 else {
             errorMessage = "Please enter a valid amount greater than zero."
@@ -254,7 +253,7 @@ struct TransactionFormView: View {
         
         if let transaction {
             transaction.amount = amount
-            transaction.type = type
+            transaction.type = transactionType
             transaction.date = date
             transaction.notes = trimmedNotes
             
@@ -275,7 +274,7 @@ struct TransactionFormView: View {
             if let custom = selectedCustomCategory {
                 newTransaction = TransactionRecord(
                     amount: amount,
-                    type: type,
+                    type: transactionType,
                     customCategory: custom,
                     date: date,
                     notes: trimmedNotes
@@ -283,7 +282,7 @@ struct TransactionFormView: View {
             } else {
                 newTransaction = TransactionRecord(
                     amount: amount,
-                    type: type,
+                    type: transactionType,
                     category: selectedFinanceCategory ?? .other,
                     date: date,
                     notes: trimmedNotes
